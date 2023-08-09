@@ -18,7 +18,7 @@ func GameEntry(ctx *gin.Context) {
 		return
 	}
 
-	url := fmt.Sprintf("http://%s:8080/gamer_name", localIP)
+	url := fmt.Sprintf("http://%s:8080/player_name", localIP)
 
 	qrCode, err := qrcode.New(url, qrcode.Medium)
 	if err != nil {
@@ -46,7 +46,7 @@ func getLocalIP() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	for _, addr := range addrs {
 		ipnet, ok := addr.(*net.IPNet)
 		if ok && !ipnet.IP.IsLoopback() && ipnet.IP.To4() != nil {
