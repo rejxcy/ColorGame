@@ -18,6 +18,7 @@ func main() {
 		ctx.HTML(http.StatusOK, "gamer_name.html", nil)
 	})
 	router.POST("/player_view", PlayerView)
+	router.GET("/game_view", GameView)
 
 	router.Run()
 }
