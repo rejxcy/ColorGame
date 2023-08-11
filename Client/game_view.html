@@ -3,11 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Game View</title>
+<title>Question Page</title>
+  <style>
+    body {
+        font-family: Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+    .question {
+        font-size: 24px;
+        font-weight: bold;
+    }
+  </style>
 </head>
 <body>
-    <div>
-        <p>遊戲畫面</p>
-    </div>
+  <h1>Question Page</h1>
+  <p class="question" id="question"></p>
+
+  <script>
+    const socket = new WebSocket("ws://localhost:8080/ws");
+
+    socket.onmessage = (event) => {
+        const data = event.data.split(",");
+        const question = data[0];
+        const color = data[1];
+
+        const questionElement = document.getElementById("question");
+        questionElement.textContent = question;
+        questionElement.style.color = color;
+    };
+  
+    socket.onclose = (event) => {
+        console.log("WebSocket connection closed:", event.code, event.reason);
+    };
+</script>
+
 </body>
 </html>
