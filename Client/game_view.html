@@ -23,7 +23,7 @@
   <p class="question" id="question"></p>
 
   <script>
-    const socket = new WebSocket("ws://localhost:8080/ws");
+    const socket = new WebSocket("ws://localhost:8080/ws/Game");
 
     socket.onmessage = (event) => {
         const data = event.data.split(",");

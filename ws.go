@@ -17,7 +17,7 @@ var upgrader = websocket.Upgrader{
 var questions = []string{"紅色", "綠色", "藍色", "黃色", "橘色", "紫色"}
 var colors = []string{"red", "green", "blue", "yellow", "orange", "purple"}
 
-var clients = make(map[*websocket.Conn]bool)
+var clients = make(map[string]*websocket.Conn)
 var questionCount = 0
 
 func WS(ctx *gin.Context) {
@@ -29,8 +29,11 @@ func WS(ctx *gin.Context) {
 	}
 	defer conn.Close()
 
-	clients[conn] = true
-	defer delete(clients, conn)
+	client := ctx.Param("client")
+	
+	// TODO: key check
+	clients[client] = conn
+	defer delete(clients, client)
 
 	sendQuestion(conn)
 
@@ -43,8 +46,8 @@ func WS(ctx *gin.Context) {
 		
 		if string(m) == colors[questionCount] {
 			NewQuestion()
-			for c := range clients {
-                sendQuestion(c)
+			for _, w := range clients {
+                sendQuestion(w)
             }
 		} 
 	}

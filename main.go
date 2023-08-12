@@ -19,7 +19,7 @@ func main() {
 	})
 	router.POST("/player_view", PlayerView)
 	router.GET("/game_view", GameView)
-	router.GET("/ws", WS)
+	router.GET("/ws/:client", WS)
 
 	router.Run()
 }
