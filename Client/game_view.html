@@ -1,44 +1,72 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Question Page</title>
-  <style>
-    body {
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Question Page</title>
+    <style>
+      body {
         font-family: Arial, sans-serif;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-    }
-    .question {
+      }
+      .question {
         font-size: 24px;
         font-weight: bold;
-    }
-  </style>
-</head>
-<body>
-  <h1>Question Page</h1>
-  <p class="question" id="question"></p>
+      }
+      .restart-button {
+        margin-top: 20px;
+        padding: 10px 20px;
+        font-size: 16px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Question Page</h1>
+    <p class="question" id="question"></p>
 
-  <script>
-    const socket = new WebSocket("ws://localhost:8080/ws/Game");
+    <script>
+      const socket = new WebSocket("ws://localhost:8080/ws/Game");
 
-    socket.onmessage = (event) => {
+      socket.onmessage = (event) => {
         const data = event.data.split(",");
-        const question = data[0];
-        const color = data[1];
+        if (data[0] === "GameEnd") {
+          const wrongCount = parseInt(data[1], 10);
+          const restartButton = document.createElement("button");
+          restartButton.className = "restart-button";
+          restartButton.textContent = "重新開始";
+          restartButton.addEventListener("click", () => {
+            socket.send("Restart"); // 傳送重新開始的訊息
+            restartButton.remove(); // 移除重新開始按鈕
+            alertMessage.remove();
+          });
 
-        const questionElement = document.getElementById("question");
-        questionElement.textContent = question;
-        questionElement.style.color = color;
-    };
-  
-    socket.onclose = (event) => {
+          const alertMessage = document.createElement("div");
+          alertMessage.textContent = `遊戲已結束！錯誤次數：${wrongCount}`;
+
+          document.body.appendChild(alertMessage);
+          document.body.appendChild(restartButton);
+        } else {
+          const question = data[0];
+          const color = data[1];
+
+          const questionElement = document.getElementById("question");
+          questionElement.textContent = question;
+          questionElement.style.color = color;
+        }
+      };
+
+      socket.onclose = (event) => {
         console.log("WebSocket connection closed:", event.code, event.reason);
-    };
-</script>
-
-</body>
+      };
+    </script>
+  </body>
 </html>

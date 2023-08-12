@@ -39,14 +39,18 @@ func WS(ctx *gin.Context) {
 			return
 		}
 
-		if game.isAnswer(string(m)) {
+		if string(m) == "Restart" {
+			game = NewGame()
+			sendQuestionToAll()
+			
+		} else if game.isAnswer(string(m)) {
 			if !game.isGameEnd {
 				sendQuestionToAll()
 			}
 		}
 
 		if game.isGameEnd {
-			fmt.Println("game is over!!")
+			sendGameEndding(clients["Game"])
 		}
 	}
 }
@@ -64,5 +68,12 @@ func sendQuestion(ws *websocket.Conn) {
 		if err := ws.WriteMessage(websocket.TextMessage, []byte(message)); err != nil {
 			fmt.Println("Error sending question:", err)
 		}
+	}
+}
+
+func sendGameEndding(ws *websocket.Conn) {
+	message := fmt.Sprintf("GameEnd,%d", game.wrongCount)
+	if err := ws.WriteMessage(websocket.TextMessage, []byte(message)); err != nil {
+		fmt.Println("Error sending question:", err)
 	}
 }
