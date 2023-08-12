@@ -27,26 +27,54 @@
         cursor: pointer;
         transition: background-color 0.3s;
       }
+      .timer {
+        font-size: 20px;
+      }
     </style>
   </head>
   <body>
     <h1>Question Page</h1>
+    <p class="timer" id="timer">0.0 秒</p>
     <p class="question" id="question"></p>
 
     <script>
       const socket = new WebSocket("ws://localhost:8080/ws/Game");
+      const timerElement = document.getElementById("timer");
+
+      let elapsedSeconds = 0;
+      let timerInterval; // 計時器的間隔 ID
+
+      function updateTimer() {
+        elapsedSeconds += 0.1;
+        timerElement.textContent = `${elapsedSeconds.toFixed(1)} 秒`;
+      }
+
+      function startTimer() {
+        timerInterval = setInterval(updateTimer, 100); // 每 0.1 秒更新計時器
+      }
+
+      function stopTimer() {
+        clearInterval(timerInterval);
+      }
+
+      startTimer()
 
       socket.onmessage = (event) => {
         const data = event.data.split(",");
+
         if (data[0] === "GameEnd") {
+          stopTimer();
+
           const wrongCount = parseInt(data[1], 10);
           const restartButton = document.createElement("button");
           restartButton.className = "restart-button";
           restartButton.textContent = "重新開始";
           restartButton.addEventListener("click", () => {
-            socket.send("Restart"); // 傳送重新開始的訊息
-            restartButton.remove(); // 移除重新開始按鈕
+            socket.send("Restart");
+            restartButton.remove();
             alertMessage.remove();
+            elapsedSeconds = 0; // 重置計時器
+            startTimer()
           });
 
           const alertMessage = document.createElement("div");
@@ -65,6 +93,7 @@
       };
 
       socket.onclose = (event) => {
+        stopTimer()
         console.log("WebSocket connection closed:", event.code, event.reason);
       };
     </script>
