@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"html/template"
-	"net"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -12,7 +11,7 @@ import (
 )
 
 func GameEntry(ctx *gin.Context) {
-	localIP, err := getLocalIP()
+	localIP, err := GetLocalIP()
 	if err != nil {
 		ctx.String(http.StatusInternalServerError, "Error getting local IP")
 		return
@@ -39,19 +38,4 @@ func GameEntry(ctx *gin.Context) {
 	ctx.HTML(http.StatusOK, "game_entry.html", gin.H{
 		"QRCodeBase64": template.HTML(qrCodeBase64),
 	})
-}
-
-func getLocalIP() (string, error) {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return "", err
-	}
-
-	for _, addr := range addrs {
-		ipnet, ok := addr.(*net.IPNet)
-		if ok && !ipnet.IP.IsLoopback() && ipnet.IP.To4() != nil {
-			return ipnet.IP.String(), nil
-		}
-	}
-	return "", fmt.Errorf("no valid local ip found")
 }
