@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>game entry</title>
+    <title>ColorGame</title>
     <style>
         .container {
             display: flex;
@@ -15,12 +15,11 @@
     </style>
 </head>
 <body>
-    <h1>entry view</h1>
     <div class="container">
         <img src="data:image/png;base64,{{ .QRCodeBase64 }}" alt="QR Code">
-        <p>Scan the QR code to access the game!</p>
+        <p>掃描 QR Code 進入答題頁，進入後即可開始遊戲</p>
         <br>
-        <button type ="button" onclick="window.location.href='./game_view'">GO</button>
+        <button type ="button" onclick="window.location.href='./game_view'">開始遊戲</button>
     </div>
 </body>
 </html>
