@@ -29,9 +29,7 @@ func WS(ctx *gin.Context) {
 
 	clients[client] = ws
 	defer delete(clients, client)
-	defer updateGamePlayers()
 
-	updateGamePlayers()
 	sendQuestion(ws)
 
 	for {
@@ -44,7 +42,7 @@ func WS(ctx *gin.Context) {
 		if string(m) == "Restart" {
 			game.restart()
 			sendQuestionToAll()
-
+			
 		} else if game.isAnswer(string(m)) {
 			if !game.isGameEnd {
 				sendQuestionToAll()
@@ -78,14 +76,4 @@ func sendGameEndding(ws *websocket.Conn) {
 	if err := ws.WriteMessage(websocket.TextMessage, []byte(message)); err != nil {
 		fmt.Println("Error sending question:", err)
 	}
-}
-
-func updateGamePlayers() {
-	list := []string{}
-	for player := range clients {
-		if player != "Game" {
-			list = append(list, player)
-		}
-	}
-	game.updatePlayers(list)
 }

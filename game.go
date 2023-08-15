@@ -6,7 +6,6 @@ import (
 
 type Game struct {
 	isGameEnd  bool
-	players    []string
 	quizList   []string
 	colorList  []string
 	whichQuiz  int
@@ -17,7 +16,6 @@ func NewGame() *Game {
 
 	return &Game{
 		isGameEnd:  false,
-		players:    [] string{},
 		quizList:   randomColors(10),
 		colorList:  randomColors(10),
 		whichQuiz:  0,
@@ -52,10 +50,6 @@ func (g *Game) isAnswer(color string) bool {
 	
 	g.wrongCount ++
 	return false
-}
-
-func (g *Game) updatePlayers(names []string) {
-	g.players = names
 }
 
 func randomColors(count int) []string {
