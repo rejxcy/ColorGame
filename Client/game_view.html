@@ -64,8 +64,7 @@
 
         if (data[0] === "GameEnd") {
           stopTimer();
-
-          const wrongCount = parseInt(data[1], 10);
+          
           const restartButton = document.createElement("button");
           restartButton.className = "restart-button";
           restartButton.textContent = "重新開始";
@@ -78,7 +77,7 @@
           });
 
           const alertMessage = document.createElement("div");
-          alertMessage.textContent = `遊戲已結束！錯誤次數：${wrongCount}`;
+          alertMessage.textContent = `遊戲結束！`;
 
           document.body.appendChild(alertMessage);
           document.body.appendChild(restartButton);
