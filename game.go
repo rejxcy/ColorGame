@@ -5,6 +5,7 @@ import (
 )
 
 type Game struct {
+	player	   *Player
 	isGameEnd  bool
 	quizList   []string
 	colorList  []string
@@ -12,9 +13,10 @@ type Game struct {
 	wrongCount int
 }
 
-func NewGame() *Game {
+func NewGame(player *Player) *Game {
 
 	return &Game{
+		player: 	player,
 		isGameEnd:  false,
 		quizList:   randomColors(10),
 		colorList:  randomColors(10),

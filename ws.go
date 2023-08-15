@@ -15,8 +15,9 @@ var upgrader = websocket.Upgrader{
 }
 
 var clients = make(map[string]*websocket.Conn)
-var game *Game = NewGame()
-var isReadyToStart = false
+var player *Player
+var game *Game
+var isGameStart = false
 
 func WS(ctx *gin.Context) {
 	ws, err := upgrader.Upgrade(ctx.Writer, ctx.Request, nil)
@@ -32,7 +33,7 @@ func WS(ctx *gin.Context) {
 	defer delete(clients, client)
 
 	if client != "waiting" {
-		playerReady(client)
+		gamerReady(client)
 		sendQuestion(ws)
 	}
 
@@ -82,11 +83,13 @@ func sendGameEndding(ws *websocket.Conn) {
 	}
 }
 
-func playerReady(playerName string) {
-	if !isReadyToStart {
+func gamerReady(playerName string) {
+	if !isGameStart {
+		player = NewPlayer(playerName)
+		game = NewGame(player)
 		if err := clients["waiting"].WriteMessage(websocket.TextMessage, []byte(playerName)); err != nil {
 			fmt.Println("Error sending question:", err)
 		}
 	}
-	isReadyToStart = true
+	isGameStart = true
 }
