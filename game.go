@@ -25,6 +25,13 @@ func NewGame() *Game {
 	}
 }
 
+func (g *Game) restart() {
+	g.isGameEnd = false
+	g.quizList = randomColors(10)
+	g.colorList = randomColors(10)
+	g.whichQuiz = 0
+}
+
 func (g *Game) getQuiz() (string, string) {
 	if g.whichQuiz >= len(g.quizList) {
 		g.isGameEnd = true

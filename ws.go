@@ -42,7 +42,7 @@ func WS(ctx *gin.Context) {
 		}
 
 		if string(m) == "Restart" {
-			game = NewGame()
+			game.restart()
 			sendQuestionToAll()
 
 		} else if game.isAnswer(string(m)) {
