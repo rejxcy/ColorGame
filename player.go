@@ -1,24 +1,22 @@
 package main
 
 type Player struct {
-	name   string
-	bestTime float32
+	name       string
+	timeRecord float64
 }
-
 
 func NewPlayer(name string) *Player {
 	// TODO: check player from DB
 	// TODO: if not exit, create new player
 
-    return &Player{
-		name: name,
-		bestTime: 0,
+	return &Player{
+		name:       name,
+		timeRecord: 0,
 	}
 }
 
-func (p *Player) UpdateRecord(time float32) {
-    if p.bestTime > time {
-        p.bestTime = time
-    }
+func (p *Player) UpdateRecord(time float64) {
+	if p.timeRecord > time {
+		p.timeRecord = time
+	}
 }
-
