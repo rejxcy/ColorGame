@@ -2,6 +2,7 @@ package main
 
 import (
 	"math/rand"
+	"strconv"
 )
 
 type Game struct {
@@ -25,11 +26,16 @@ func NewGame(player *Player) *Game {
 	}
 }
 
-func (g *Game) restart() {
+func (g *Game) restart(gameTime string) {
 	g.isGameEnd = false
 	g.quizList = randomColors(10)
 	g.colorList = randomColors(10)
 	g.whichQuiz = 0
+	time, err := strconv.ParseFloat(gameTime, 64)
+	if err != nil {
+		time = 0
+	}
+	g.player.UpdateRecord(time)
 }
 
 func (g *Game) getQuiz() (string, string) {

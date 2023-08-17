@@ -58,15 +58,15 @@ func initialPlayerDb() *playerDB {
 func CheckPlayer(name string) *Player {
 	player, err := db.selectPlayerByName(name)
 	if err != nil {
-		fmt.Println("player not found")
+		fmt.Println("player not found, create new one")
 	}
 
 	if player == nil {
-		player := Player{
+		player = &Player{
 			name:       name,
 			timeRecord: 0,
 		}
-		db.insert(player)
+		db.insert(*player)
 	}
 	
 	return player
@@ -74,4 +74,5 @@ func CheckPlayer(name string) *Player {
 
 func UpdatePlayerRecord(player *Player) {
 	db.update(*player)
+	SendRecordToPlayer(player)
 }

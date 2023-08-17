@@ -35,6 +35,7 @@
     </style>
 </head>
 <body>
+    <p id="bestTime"></p>
     <div class="color-grid">
         <div class="color-box" id="red"></div>
         <div class="color-box" id="green"></div>
@@ -48,6 +49,8 @@
         const socket = new WebSocket("ws://{{.localIP}}:8080/ws/{{.playerName}}");
         const colorBoxes = document.querySelectorAll(".color-box");
         
+        const bestTimeElement = document.getElementById("bestTime");
+
         function handleColorClick(event) {
             const selectedColor = event.target.id;
             socket.send(selectedColor);
@@ -55,9 +58,11 @@
     
         socket.onmessage = (event) => {
             const data = event.data.split(",");
-            const question = data[0];
-            const color = data[1];
-    
+            if (data[0] == "TimeRecord") {
+                timeFloat = parseFloat(data[1]);
+                bestTimeElement.textContent = `最佳紀錄 ${timeFloat.toFixed(1)} 秒`;
+            }
+
             colorBoxes.forEach(box => {
                 box.removeEventListener("click", handleColorClick);
                 box.addEventListener("click", handleColorClick);

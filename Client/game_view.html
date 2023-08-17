@@ -69,7 +69,7 @@
           restartButton.className = "restart-button";
           restartButton.textContent = "重新開始";
           restartButton.addEventListener("click", () => {
-            socket.send("Restart");
+            socket.send(`Restart,${elapsedSeconds}`);
             restartButton.remove();
             alertMessage.remove();
             elapsedSeconds = 0; // 重置計時器

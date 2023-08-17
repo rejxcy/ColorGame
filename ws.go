@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -43,12 +44,13 @@ func WS(ctx *gin.Context) {
 			fmt.Println("Error with read message:", err)
 			return
 		}
+		message := strings.Split(string(m), ",")
 
-		if string(m) == "Restart" {
-			game.restart()
+		if message[0] == "Restart" {
+			game.restart(message[1])
 			sendQuestionToAll()
 			
-		} else if game.isAnswer(string(m)) {
+		} else if game.isAnswer(message[0]) {
 			if !game.isGameEnd {
 				sendQuestionToAll()
 			}
@@ -87,9 +89,20 @@ func gamerReady(playerName string) {
 	if !isGameStart {
 		player = CheckPlayer(playerName)
 		game = NewGame(player)
+		SendRecordToPlayer(player)
 		if err := clients["waiting"].WriteMessage(websocket.TextMessage, []byte(playerName)); err != nil {
 			fmt.Println("Error sending question:", err)
 		}
 	}
 	isGameStart = true
+}
+
+func SendRecordToPlayer(player *Player) {
+	playerWS := clients[player.name]
+	bestTime := player.timeRecord
+
+	message := fmt.Sprintf("TimeRecord,%f", bestTime)
+	if err := playerWS.WriteMessage(websocket.TextMessage, []byte(message)); err != nil {
+		fmt.Println("Error sending question:", err)
+	}
 }
