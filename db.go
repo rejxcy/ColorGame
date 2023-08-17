@@ -13,6 +13,7 @@ type playerDB struct {
 	db *sql.DB
 }
 
+const DBPath = "./players.db"
 const TableName = "players"
 
 const (
@@ -20,8 +21,8 @@ const (
 	TimeRecord string = "time_record"
 )
 
-func NewPlayerDB(path string) (*playerDB, error) {
-	db, err := sql.Open("sqlite3", path)
+func NewPlayerDB() (*playerDB, error) {
+	db, err := sql.Open("sqlite3", DBPath)
 	if err != nil {
 		return nil, err
 	}
