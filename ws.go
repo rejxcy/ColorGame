@@ -85,7 +85,7 @@ func sendGameEndding(ws *websocket.Conn) {
 
 func gamerReady(playerName string) {
 	if !isGameStart {
-		player = NewPlayer(playerName)
+		player = CheckPlayer(playerName)
 		game = NewGame(player)
 		if err := clients["waiting"].WriteMessage(websocket.TextMessage, []byte(playerName)); err != nil {
 			fmt.Println("Error sending question:", err)

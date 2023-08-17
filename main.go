@@ -2,13 +2,18 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
+var db *playerDB
+
 func main() {
+	db = initialPlayerDb()
+
 	router := gin.Default()
 	router.LoadHTMLGlob("client/*")
 
@@ -40,4 +45,33 @@ func GetLocalIP() (string, error) {
 		}
 	}
 	return "", fmt.Errorf("no valid local ip found")
+}
+
+func initialPlayerDb() *playerDB {
+	db, err := NewPlayerDB()
+	if err != nil {
+		log.Fatalln("Cann't initial playerDB, err: ", err)
+	}
+	return db
+}
+
+func CheckPlayer(name string) *Player {
+	player, err := db.selectPlayerByName(name)
+	if err != nil {
+		fmt.Println("player not found")
+	}
+
+	if player == nil {
+		player := Player{
+			name:       name,
+			timeRecord: 0,
+		}
+		db.insert(player)
+	}
+	
+	return player
+}
+
+func UpdatePlayerRecord(player *Player) {
+	db.update(*player)
 }
