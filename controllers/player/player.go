@@ -1,4 +1,4 @@
-package main
+package player
 
 type Player struct {
 	name       string
