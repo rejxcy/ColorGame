@@ -1,4 +1,4 @@
 .vscode/
-vendor/
 colorgame
 players.db
+/log
