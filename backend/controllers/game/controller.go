@@ -1,21 +1,16 @@
 package game
 
 import (
-	"encoding/base64"
 	"encoding/json"
-	"fmt"
-	"html/template"
 	"net/http"
 	"time"
 
 	"github.com/rejxcy/colorgame/controllers"
-	"github.com/rejxcy/colorgame/pkg/ip"
 	"github.com/rejxcy/logger"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"github.com/skip2/go-qrcode"
 )
 
 func New(base *controllers.Context) *controller {
@@ -170,34 +165,4 @@ func (gc *GameConnection) pingHandler() {
     }
 }
 
-// not ready, waiting for frontend
-func (c *controller) GameEntry(ctx *gin.Context) {
-	localIP, err := ip.GetLocalIP()
-	if err != nil {
-		ctx.String(http.StatusInternalServerError, "Error getting local IP")
-		return
-	}
-
-	url := fmt.Sprintf("http://%s:8080/player_name", localIP)
-
-	qrCode, err := qrcode.New(url, qrcode.Medium)
-	if err != nil {
-		ctx.String(http.StatusInternalServerError, "Error creating QR code")
-		return
-	}
-
-	qrCode.DisableBorder = true
-
-	qrCodeImage, err := qrCode.PNG(256)
-	if err != nil {
-		ctx.String(http.StatusInternalServerError, "Error encoding QR code to PNG")
-		return
-	}
-
-	qrCodeBase64 := base64.StdEncoding.EncodeToString(qrCodeImage)
-
-	ctx.HTML(http.StatusOK, "game_entry.html", gin.H{
-		"QRCodeBase64": template.HTML(qrCodeBase64),
-	})
-}
 

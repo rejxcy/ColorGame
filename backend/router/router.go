@@ -42,6 +42,6 @@ func Routers(engine *gin.Engine) {
 	{
 		c := game.New(ctx)
 		r := v1.Group("/game")
-		r.POST("/newGame", c.GameEntry)
+		r.POST("/ws", c.HandleWebSocket)
 	}
 }
