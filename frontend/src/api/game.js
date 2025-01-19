@@ -1,30 +1,63 @@
-import axios from 'axios'
+export class GameWebSocket {
+    constructor() {
+        this.ws = null;
+        this.messageHandlers = new Map();
+    }
 
-const BASE_URL = 'http://localhost:8080/api'
+    connect() {
+        this.ws = new WebSocket('ws://localhost:8080/api/game/ws');
+        
+        this.ws.onmessage = (event) => {
+            const message = JSON.parse(event.data);
+            console.log('Received message:', message);
+            const handler = this.messageHandlers.get(message.type);
+            if (handler) {
+                handler(message.payload);
+            }
+        };
 
-export const gameApi = {
-  // 開始新遊戲
-  newGame() {
-    return axios.post(`${BASE_URL}/game/new`)
-  },
+        this.ws.onopen = () => {
+            console.log('WebSocket connected');
+        };
 
-  // 提交答案
-  submitAnswer(color) {
-    return axios.post(`${BASE_URL}/game/answer`, { color })
-  },
+        this.ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
 
-  // 獲取遊戲進度
-  getProgress() {
-    return axios.get(`${BASE_URL}/game/progress`)
-  },
+        this.ws.onclose = () => {
+            console.log('WebSocket closed');
+        };
 
-  // 重新開始遊戲
-  restart() {
-    return axios.post(`${BASE_URL}/game/restart`)
-  },
+        return new Promise((resolve, reject) => {
+            this.ws.onopen = () => resolve();
+            this.ws.onerror = (error) => reject(error);
+        });
+    }
 
-  // 設置玩家名稱
-  setPlayerName(name) {
-    return axios.post(`${BASE_URL}/player/name`, { name })
-  }
+    on(messageType, handler) {
+        this.messageHandlers.set(messageType, handler);
+    }
+
+    sendAnswer(color) {
+        this.send('answer', color);
+    }
+
+    restart() {
+        this.send('restart');
+    }
+
+    send(type, payload) {
+        if (this.ws?.readyState === WebSocket.OPEN) {
+            const message = {
+                type: type,
+                payload: payload
+            };
+            console.log('Sending message:', message);
+            this.ws.send(JSON.stringify(message));
+        }
+    }
+
+    close() {
+        this.ws?.close();
+    }
 }
