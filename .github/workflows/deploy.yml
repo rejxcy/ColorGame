@@ -15,11 +15,6 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
     
-    - name: Set up Docker Compose
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y docker-compose
-      
     - name: Build Docker images
       run: |
         docker compose build
@@ -30,11 +25,8 @@ jobs:
         mkdir -p ~/.ssh
         echo "${{ secrets.AWS_SSH_KEY }}" > ~/.ssh/private.key
         chmod 600 ~/.ssh/private.key
-        
-        # 添加主機到 known_hosts
         ssh-keyscan -H ${{ secrets.AWS_HOST }} >> ~/.ssh/known_hosts
         
-        # 創建 SSH 配置文件
         cat > ~/.ssh/config << EOF
         Host ec2
           HostName ${{ secrets.AWS_HOST }}
@@ -47,21 +39,32 @@ jobs:
         chmod 600 ~/.ssh/config
         chmod 600 ~/.ssh/known_hosts
         
-    - name: Test SSH connection
-      run: ssh ec2 'echo "SSH connection successful"'
+    - name: Prepare deployment files
+      run: |
+        mkdir -p deploy
+        cp docker-compose.yml deploy/
+        cp -r frontend/nginx deploy/
+        tar czf deploy.tar.gz deploy/
         
     - name: Copy files to EC2
       run: |
         echo "Copying files to EC2..."
-        scp -i ~/.ssh/private.key images.tar docker-compose.yml ec2:~/colorgame/
+        scp -i ~/.ssh/private.key images.tar deploy.tar.gz ec2:~/colorgame/
         
     - name: Deploy to EC2
       run: |
         echo "Starting deployment..."
         ssh ec2 '
           cd ~/colorgame &&
+          tar xzf deploy.tar.gz &&
+          mv deploy/* . &&
+          rm -rf deploy deploy.tar.gz &&
           docker load < images.tar &&
-          docker compose down &&
+          # 確保停止並移除所有相關容器
+          docker compose down --remove-orphans || true &&
+          # 清理未使用的映像
+          docker system prune -f &&
+          # 啟動新容器
           docker compose up -d &&
           rm images.tar
         ' 

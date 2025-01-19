@@ -3,6 +3,7 @@ version: '3.8'
 services:
   frontend:
     build: ./frontend
+    image: colorgame-frontend:latest
     ports:
       - "80:80"
     depends_on:
@@ -10,5 +11,6 @@ services:
 
   backend:
     build: ./backend
+    image: colorgame-backend:latest
     ports:
       - "8080:8080" 
