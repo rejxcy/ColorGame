@@ -21,40 +21,37 @@ const (
 var ValidColors = []string{"red", "green", "blue", "yellow", "orange", "purple"}
 
 func NewGame() *Game {
-    game := &Game{
-        QuizList:   make([]string, QuizCount),
-        ColorList:  make([]string, QuizCount),
-        rng:        rand.New(rand.NewSource(time.Now().UnixNano())),
-    }
-    game.generateColors()
-    return game
+	game := &Game{
+		QuizList:  make([]string, QuizCount),
+		ColorList: make([]string, QuizCount),
+	}
+	game.generateColors()
+	return game
 }
 
 func (g *Game) GetStatus() (GameStatus, error) {
-	if g.WhichQuiz >= len(g.QuizList) {
-		return GameStatus{}, ErrGameNotStarted
+	if g.IsFinished {
+		return GameStatus{
+			Progress:   QuizCount,
+			Percentage: 100,
+			WrongCount: g.WrongCount,
+			IsFinished: true,
+			TotalQuiz:  QuizCount,
+		}, nil
 	}
-
-	timeUsed := g.calculateTimeUsed()
-	progress := float64(g.WhichQuiz) / float64(QuizCount) * 100
 
 	return GameStatus{
 		Quiz:         g.QuizList[g.WhichQuiz],
 		DisplayColor: g.ColorList[g.WhichQuiz],
 		Progress:     g.WhichQuiz,
-		Percentage:   progress,
+		Percentage:   float64(g.WhichQuiz) / float64(QuizCount) * 100,
 		WrongCount:   g.WrongCount,
 		IsFinished:   g.IsFinished,
-		TimeUsed:     timeUsed,
 		TotalQuiz:    QuizCount,
 	}, nil
 }
 
 func (g *Game) Answer(color string) (bool, bool, error) {
-	if g.WhichQuiz >= len(g.QuizList) {
-		return false, false, ErrGameNotStarted
-	}
-
 	if g.IsFinished {
 		return false, true, ErrGameFinished
 	}
@@ -66,9 +63,9 @@ func (g *Game) Answer(color string) (bool, bool, error) {
 	correct := color == g.QuizList[g.WhichQuiz]
 	if correct {
 		g.WhichQuiz++
-		g.IsFinished = g.WhichQuiz >= len(g.QuizList)
-		if g.IsFinished {
-			g.EndTime = time.Now().UnixNano() / TimeUnit
+		if g.WhichQuiz >= len(g.QuizList) {
+			g.IsFinished = true
+			return true, true, nil
 		}
 	} else {
 		g.WrongCount++
@@ -81,25 +78,16 @@ func (g *Game) Restart() {
 	g.generateColors()
 	g.WhichQuiz = 0
 	g.WrongCount = 0
-	g.StartTime = time.Now().UnixNano() / TimeUnit
-	g.EndTime = 0
 	g.IsFinished = false
 }
 
 // 將顏色生成邏輯抽取為單獨的方法
 func (g *Game) generateColors() {
-    for i := 0; i < QuizCount; i++ {
-        g.QuizList[i] = ValidColors[g.rng.Intn(len(ValidColors))]
-        g.ColorList[i] = ValidColors[g.rng.Intn(len(ValidColors))]
-    }
-}
-
-func (g *Game) calculateTimeUsed() float64 {
-	if g.EndTime > 0 {
-		return float64(g.EndTime-g.StartTime) / 1000 // 轉換為秒
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	for i := 0; i < QuizCount; i++ {
+		g.QuizList[i] = ValidColors[rng.Intn(len(ValidColors))]
+		g.ColorList[i] = ValidColors[rng.Intn(len(ValidColors))]
 	}
-	currentTime := time.Now().UnixNano() / TimeUnit
-	return float64(currentTime-g.StartTime) / 1000
 }
 
 // 使用 map 優化顏色驗證

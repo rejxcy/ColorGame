@@ -8,7 +8,6 @@ import (
 	"github.com/rejxcy/colorgame/controllers/game"
 )
 
-
 func middlewareCors() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		//请求方法
@@ -42,6 +41,6 @@ func Routers(engine *gin.Engine) {
 	{
 		c := game.New(ctx)
 		r := v1.Group("/game")
-		r.POST("/ws", c.HandleWebSocket)
+		r.GET("/ws", c.HandleWebSocket)
 	}
 }
