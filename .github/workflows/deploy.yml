@@ -25,26 +25,27 @@ jobs:
         docker compose build
         docker save $(docker images -q) -o images.tar
         
-    - name: Configure SSH
+    - name: Debug SSH setup
       run: |
-        mkdir -p ~/.ssh/
+        echo "Setting up SSH configuration..."
+        mkdir -p ~/.ssh
         echo "${{ secrets.AWS_SSH_KEY }}" > ~/.ssh/private.key
         chmod 600 ~/.ssh/private.key
-        cat >>~/.ssh/config <<END
-        Host aws
-          HostName ${{ secrets.AWS_HOST }}
-          User ${{ secrets.AWS_USERNAME }}
-          IdentityFile ~/.ssh/private.key
-          StrictHostKeyChecking no
-        END
+        ls -la ~/.ssh/private.key
+        echo "SSH key permissions set"
+        
+        # 測試 SSH 連接
+        ssh -i ~/.ssh/private.key -o StrictHostKeyChecking=no -vvv ${{ secrets.AWS_USERNAME }}@${{ secrets.AWS_HOST }} 'echo "SSH connection successful"'
         
     - name: Copy files to EC2
       run: |
-        scp -i ~/.ssh/private.key images.tar docker-compose.yml ${{ secrets.AWS_USERNAME }}@${{ secrets.AWS_HOST }}:~/colorgame/
+        echo "Copying files to EC2..."
+        scp -i ~/.ssh/private.key -o StrictHostKeyChecking=no images.tar docker-compose.yml ${{ secrets.AWS_USERNAME }}@${{ secrets.AWS_HOST }}:~/colorgame/
         
     - name: Deploy to EC2
       run: |
-        ssh -i ~/.ssh/private.key ${{ secrets.AWS_USERNAME }}@${{ secrets.AWS_HOST }} '
+        echo "Starting deployment..."
+        ssh -i ~/.ssh/private.key -o StrictHostKeyChecking=no ${{ secrets.AWS_USERNAME }}@${{ secrets.AWS_HOST }} '
           cd ~/colorgame &&
           docker load < images.tar &&
           docker compose down &&
