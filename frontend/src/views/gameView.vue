@@ -56,6 +56,9 @@ const formatTime = (time) => (time || 0).toFixed(1)
 
 const startTimer = () => {
   startTime.value = Date.now()
+  if (timerInterval.value) {
+    clearInterval(timerInterval.value)
+  }
   timerInterval.value = setInterval(() => {
     elapsedTime.value = (Date.now() - startTime.value) / 1000
   }, 100)
@@ -82,6 +85,8 @@ const handleRestart = () => {
   gameWs.restart()
   startTime.value = Date.now()
   elapsedTime.value = 0
+  stopTimer()
+  startTimer()
 }
 
 // WebSocket 消息處理
@@ -91,6 +96,9 @@ const setupWebSocket = async () => {
 
     gameWs.on('game_state', (state) => {
       gameState.value = state
+      if (state.progress === 0 && !timerInterval.value) {
+        startTimer()
+      }
     })
 
     gameWs.on('game_over', (finalState) => {
