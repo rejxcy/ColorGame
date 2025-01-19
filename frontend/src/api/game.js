@@ -5,7 +5,10 @@ export class GameWebSocket {
     }
 
     connect() {
-        this.ws = new WebSocket('ws://localhost:8080/api/game/ws');
+        // 使用相對路徑，讓 nginx 處理代理
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${wsProtocol}//${window.location.host}/api/game/ws`;
+        this.ws = new WebSocket(wsUrl);
         
         this.ws.onmessage = (event) => {
             const message = JSON.parse(event.data);
