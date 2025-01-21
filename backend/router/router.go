@@ -21,13 +21,10 @@ func middlewareCors() gin.HandlerFunc {
 		// 跨域关键设置 让浏览器可以解析
 		ctx.Header("Access-Control-Allow-Credentials", "true")
 
-		//放行所有OPTIONS方法
 		if method == "OPTIONS" {
 			ctx.AbortWithStatus(http.StatusOK)
 			return
 		}
-
-		// 处理请求
 		ctx.Next()
 	}
 }

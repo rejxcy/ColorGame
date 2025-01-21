@@ -81,7 +81,6 @@ func (g *Game) Restart() {
 	g.IsFinished = false
 }
 
-// 將顏色生成邏輯抽取為單獨的方法
 func (g *Game) generateColors() {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i := 0; i < QuizCount; i++ {
