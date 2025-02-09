@@ -3,14 +3,11 @@ package game
 import (
 	"encoding/json"
 	"net/http"
-	"time"
-
-	"github.com/rejxcy/colorgame/controllers"
-	"github.com/rejxcy/logger"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/rejxcy/colorgame/backend/controllers"
+	"github.com/rejxcy/logger"
 )
 
 func New(base *controllers.Context) *controller {
@@ -29,153 +26,154 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
+// handleWebSocket 處理 WebSocket 連接
 func (c *controller) HandleWebSocket(ctx *gin.Context) {
+	// 允許跨域
+	upgrader.CheckOrigin = func(r *http.Request) bool {
+		return true // 開發環境下允許所有來源
+	}
+
+	// 獲取參數
+	roomID := ctx.Query("room_id")
+	playerName := ctx.Query("player_name")
+	isHost := ctx.Query("is_host") == "true"
+
+	// 驗證參數
+	if roomID == "" || playerName == "" {
+		ctx.String(http.StatusBadRequest, "缺少必要參數")
+		return
+	}
+
 	conn, err := upgrader.Upgrade(ctx.Writer, ctx.Request, nil)
 	if err != nil {
 		logger.Output.Error("WebSocket upgrade failed: %v", err)
 		return
 	}
 
-	gameConn := &GameConnection{
-		conn:     conn,
-		game:     NewGame(),
-		done:     make(chan struct{}),
-		playerID: uuid.New().String(),
+	// 記錄連接信息
+	logger.Output.Info("New WebSocket connection: room=%s, player=%s, host=%v",
+		roomID, playerName, isHost)
+
+	// 獲取或創建房間
+	var room *Room
+	if isHost {
+		room = c.createRoom(roomID)
+		logger.Output.Info("Room %s created", room.ID)
+	} else {
+		room = c.getRoom(roomID)
+		if room == nil {
+			logger.Output.Error("Room %s not found", roomID)
+			conn.WriteJSON(Message{
+				Type:    msgTypeError,
+				Payload: errRoomNotFound,
+			})
+			conn.Close()
+			return
+		}
+		logger.Output.Info("Room %s found", room.ID)
 	}
 
+	// 創建玩家
+	player := NewPlayer(conn, playerName, isHost)
+	logger.Output.Info("Created new player: %s (host: %v)", player.Name, player.IsHost)
+
+	// 將玩家加入房間
+	if err := room.AddPlayer(player); err != nil {
+		logger.Output.Error("Failed to add player %s to room %s: %v", player.Name, room.ID, err)
+		conn.WriteJSON(Message{
+			Type:    msgTypeError,
+			Payload: err.Error(),
+		})
+		conn.Close()
+		return
+	}
+	logger.Output.Info("Player %s joined room %s", player.Name, room.ID)
+	logger.Output.Info("Room players: %v", room.Players)
+
+	// 廣播更新後的玩家列表
+	room.BroadcastPlayerList()
+
+	// 開始處理玩家消息
+	c.handlePlayerMessages(room, player)
+}
+
+// handlePlayerMessages 處理玩家消息
+func (c *controller) handlePlayerMessages(room *Room, player *Player) {
 	defer func() {
-		close(gameConn.done)
-		gameConn.conn.Close()
+		if r := recover(); r != nil {
+			logger.Output.Error("Panic in handlePlayerMessages: %v", r)
+		}
+		room.RemovePlayer(player.ID)
+		logger.Output.Info("Player %s left room %s", player.Name, room.ID)
+		room.BroadcastPlayerList()
+		player.Conn.Close()
+
+		if len(room.Players) == 0 {
+			c.removeRoom(room.ID)
+			logger.Output.Info("Room %s deleted", room.ID)
+		}
 	}()
 
-	// 啟動心跳檢測
-	go gameConn.pingHandler()
-
-	// 發送初始遊戲狀態
-	gameConn.sendGameState()
-
-	logger.Output.Info("player gameConn, Id: %v", gameConn.playerID)
-
-	// 處理接收到的消息
 	for {
-		_, message, err := conn.ReadMessage()
+		_, p, err := player.Conn.ReadMessage()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				logger.Output.Error("WebSocket error: %v", err)
+			if websocket.IsUnexpectedCloseError(err,
+				websocket.CloseGoingAway,
+				websocket.CloseAbnormalClosure) {
+				logger.Output.Error("WebSocket unexpected close: %v", err)
 			}
-			break
+			return
 		}
 
-		var msg WSMessage
-		if err := json.Unmarshal(message, &msg); err != nil {
-			gameConn.sendError(1001, "無效的消息格式")
-			logger.Output.Info("worng websocket msg type: %v", err)
+		var msg Message
+		if err := json.Unmarshal(p, &msg); err != nil {
+			logger.Output.Error("Failed to unmarshal message: %v", err)
+			player.SendError(ErrCodeInvalidMessage, "無效的消息格式")
 			continue
 		}
 
-		gameConn.handleMessage(msg)
-	}
-}
+		logger.Output.Info("Received message from player %s: type=%s, payload=%v",
+			player.Name, msg.Type, msg.Payload)
 
-func (gc *GameConnection) handleMessage(msg WSMessage) {
-	switch msg.Type {
-	case MsgTypeAnswer:
-		color, ok := msg.Payload.(string)
-		if !ok {
-			gc.sendError(1002, "無效的答案格式")
-			return
-		}
-
-		correct, isFinished, err := gc.game.Answer(color)
-		if err != nil {
-			gc.sendError(1003, err.Error())
-			return
-		}
-
-		// 發送答案結果
-		gc.sendMessage(MsgTypeAnswer, map[string]interface{}{
-			"correct":  correct,
-			"finished": isFinished,
-		})
-
-		// 更新遊戲狀態
-		if isFinished {
-			status, err := gc.game.GetStatus()
-			if err != nil {
-				gc.sendError(1004, "獲取遊戲狀態失敗")
-				return
+		// 根據消息類型處理
+		switch msg.Type {
+		case MsgTypeStartGame:
+			if err := room.HandleMessage(player.ID, msg); err != nil {
+				logger.Output.Error("Failed to handle start game: %v", err)
+				player.SendError(ErrCodeInvalidMessage, err.Error())
 			}
-			gc.sendMessage(MsgTypeGameOver, status)
-		} else {
-			status, err := gc.game.GetStatus()
-			if err != nil {
-				gc.sendError(1004, "獲取遊戲狀態失敗")
-				return
+
+		case MsgTypeReady:
+			if err := room.HandleMessage(player.ID, msg); err != nil {
+				logger.Output.Error("Failed to handle ready state: %v", err)
+				player.SendError(ErrCodeInvalidMessage, err.Error())
 			}
-			gc.sendMessage(MsgTypeGameState, status)
-		}
+			logger.Output.Info("Player %s ready state changed to: %v", player.Name, msg.Payload)
+			room.BroadcastPlayerList()
 
-	case MsgTypeRestart:
-		gc.game.Restart()
-		status, err := gc.game.GetStatus()
-		if err != nil {
-			gc.sendError(1004, "獲取遊戲狀態失敗")
-			return
-		}
-		gc.sendMessage(MsgTypeGameState, status)
-
-	default:
-		gc.sendError(1001, "未知的消息類型")
-	}
-}
-
-func (gc *GameConnection) sendGameState() {
-	status, err := gc.game.GetStatus()
-	if err != nil {
-		gc.sendError(1004, "獲取遊戲狀態失敗")
-		logger.Output.Error("獲取遊戲狀態失敗: %v, %s", err, gc.game)
-		return
-	}
-	gc.sendMessage(MsgTypeGameState, status)
-}
-
-func (gc *GameConnection) sendError(code int, message string) {
-	gc.sendMessage(MsgTypeError, WSError{
-		Code:    code,
-		Message: message,
-	})
-}
-
-func (gc *GameConnection) sendMessage(msgType string, payload interface{}) {
-	gc.mu.Lock()
-	defer gc.mu.Unlock()
-
-	msg := WSMessage{
-		Type:    msgType,
-		Payload: payload,
-	}
-
-	if err := gc.conn.WriteJSON(msg); err != nil {
-		logger.Output.Error("Write error: %v", err)
-	}
-}
-
-func (gc *GameConnection) pingHandler() {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			gc.mu.Lock()
-			err := gc.conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(time.Second))
-			gc.mu.Unlock()
-			if err != nil {
-				logger.Output.Error("Ping error: %v", err)
-				return
-			}
-		case <-gc.done:
-			return
+		default:
+			logger.Output.Error("Unknown message type: %s", msg.Type)
+			player.SendError(ErrCodeInvalidMessage, "未知的消息類型")
 		}
 	}
+}
+
+// createRoom 在 Context 中創建房間
+func (c *controller) createRoom(id string) *Room {
+	room := NewRoom(id)
+	c.Base.GameRooms.Store(id, room)
+	return room
+}
+
+// getRoom 從 Context 中獲取房間
+func (c *controller) getRoom(id string) *Room {
+	if room, ok := c.Base.GameRooms.Load(id); ok {
+		return room.(*Room)
+	}
+	return nil
+}
+
+// removeRoom 從 Context 中移除房間
+func (c *controller) removeRoom(id string) {
+	c.Base.GameRooms.Delete(id)
 }

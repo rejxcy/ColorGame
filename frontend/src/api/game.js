@@ -1,44 +1,61 @@
 export class GameWebSocket {
     constructor() {
         this.ws = null;
-        this.messageHandlers = new Map();
+        this.messageHandlers = new Set();
     }
 
-    connect() {
-        // 使用相對路徑，讓 nginx 處理代理
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${wsProtocol}//${window.location.host}/api/game/ws`;
-        this.ws = new WebSocket(wsUrl);
+    async connect(roomId, playerName, isHost = false) {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+        const params = new URLSearchParams({
+            room_id: roomId,
+            player_name: playerName,
+            is_host: isHost
+        })
+        
+        this.ws = new WebSocket(`${protocol}//${window.location.host}/api/game/ws?${params}`)
         
         this.ws.onmessage = (event) => {
-            const message = JSON.parse(event.data);
-            console.log('Received message:', message);
-            const handler = this.messageHandlers.get(message.type);
-            if (handler) {
-                handler(message.payload);
+            try {
+                const message = JSON.parse(event.data);
+                console.log('Received message:', message);
+                
+                // 處理玩家列表更新
+                if (message.type === 'player_list') {
+                    const handler = this.messageHandlers.get('player_list');
+                    if (handler) {
+                        handler(message.payload);
+                    }
+                }
+                
+                // 處理其他消息
+                const handler = this.messageHandlers.get(message.type);
+                if (handler) {
+                    handler(message.payload);
+                }
+            } catch (err) {
+                console.error('處理WebSocket消息失敗:', err);
             }
         };
 
-        this.ws.onopen = () => {
-            console.log('WebSocket connected');
-        };
-
-        this.ws.onerror = (error) => {
-            console.error('WebSocket error:', error);
-        };
-
-        this.ws.onclose = () => {
-            console.log('WebSocket closed');
-        };
-
         return new Promise((resolve, reject) => {
-            this.ws.onopen = () => resolve();
-            this.ws.onerror = (error) => reject(error);
+            this.ws.onopen = () => {
+                console.log('WebSocket connected');
+                resolve();
+            };
+            this.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                reject(error);
+            };
         });
     }
 
-    on(messageType, handler) {
-        this.messageHandlers.set(messageType, handler);
+    onMessage(handler) {
+        this.messageHandlers.add(handler);
+    }
+
+    handleMessage(event) {
+        const data = JSON.parse(event.data);
+        this.messageHandlers.forEach(handler => handler(data));
     }
 
     sendAnswer(color) {
@@ -49,18 +66,19 @@ export class GameWebSocket {
         this.send('restart');
     }
 
-    send(type, payload) {
-        if (this.ws?.readyState === WebSocket.OPEN) {
-            const message = {
-                type: type,
-                payload: payload
-            };
+    send(type, payload = {}) {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            const message = JSON.stringify({ type, payload });
             console.log('Sending message:', message);
-            this.ws.send(JSON.stringify(message));
+            this.ws.send(message);
+        } else {
+            console.error('WebSocket未連接');
         }
     }
 
     close() {
-        this.ws?.close();
+        if (this.ws) {
+            this.ws.close();
+        }
     }
 }

@@ -4,8 +4,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/rejxcy/colorgame/controllers"
-	"github.com/rejxcy/colorgame/controllers/game"
+	"github.com/rejxcy/colorgame/backend/controllers"
+	"github.com/rejxcy/colorgame/backend/controllers/game"
 )
 
 func middlewareCors() gin.HandlerFunc {

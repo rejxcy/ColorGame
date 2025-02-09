@@ -1,5 +1,7 @@
 <template>
-  <router-view></router-view>
+  <div id="app">
+    <router-view></router-view>
+  </div>
 </template>
 
 <script setup>
@@ -7,10 +9,11 @@
 
 <style>
 #app {
-  font-family: Arial, sans-serif;
+  font-family: Avenir, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  text-align: center;
-  margin-top: 60px;
+  color: #2c3e50;
+  margin: 0;
+  padding: 0;
 }
 </style>

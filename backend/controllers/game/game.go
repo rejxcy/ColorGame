@@ -20,13 +20,26 @@ const (
 // 可用的顏色列表
 var ValidColors = []string{"red", "green", "blue", "yellow", "orange", "purple"}
 
-func NewGame() *Game {
-	game := &Game{
-		QuizList:  make([]string, QuizCount),
-		ColorList: make([]string, QuizCount),
+// 使用 map 優化顏色驗證
+var validColorMap = make(map[string]bool)
+
+func init() {
+	for _, color := range ValidColors {
+		validColorMap[color] = true
 	}
-	game.generateColors()
-	return game
+}
+
+// NewGame 創建新遊戲狀態
+func NewGame() *Game {
+	return &Game{
+		QuizList:   make([]string, 0),
+		ColorList:  make([]string, 0),
+		Progress:   0,
+		TotalQuiz:  QuizCount,
+		WrongCount: 0,
+		IsFinished: false,
+		StartTime:  time.Now(),
+	}
 }
 
 func (g *Game) GetStatus() (GameStatus, error) {
@@ -86,15 +99,6 @@ func (g *Game) generateColors() {
 	for i := 0; i < QuizCount; i++ {
 		g.QuizList[i] = ValidColors[rng.Intn(len(ValidColors))]
 		g.ColorList[i] = ValidColors[rng.Intn(len(ValidColors))]
-	}
-}
-
-// 使用 map 優化顏色驗證
-var validColorMap = make(map[string]bool)
-
-func init() {
-	for _, color := range ValidColors {
-		validColorMap[color] = true
 	}
 }
 
