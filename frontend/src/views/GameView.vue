@@ -180,13 +180,16 @@ const handleWebSocketMessage = (data) => {
     case 'player_list':
       console.log('Updating player list:', data.payload)
       players.value = data.payload
-      // 同步當前玩家的準備狀態
+      // 使用 playerId 來確保只更新當前玩家的準備狀態
       const currentPlayerData = data.payload.find(
-        p => p.name === localStorage.getItem('playerName')
+        p => p.id === route.query.playerId
       )
       if (currentPlayerData) {
-        console.log('Current player ready state:', currentPlayerData.isReady)
+        console.log(`Found current player (ID: ${route.query.playerId}), ready state:`, currentPlayerData.isReady)
+        // 只有當找到當前玩家時才更新準備狀態
         isReady.value = currentPlayerData.isReady
+      } else {
+        console.log('Current player not found in updated list')
       }
       break
     case 'game_start':
