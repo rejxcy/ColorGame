@@ -10,81 +10,209 @@ import (
 	"github.com/rejxcy/logger"
 )
 
-// NewRoom 創建新房間
+// NewRoom 創建新房間並初始化內部資料結構
 func NewRoom(id string) *Room {
 	return &Room{
-		ID:      id,
-		Players: make(map[string]*Player),
-		Status:  RoomStatusWaiting,
-		mu:      sync.Mutex{},
+		ID:        id,
+		Players:   make(map[string]*Player),
+		Status:    RoomStatusWaiting,
+		StartTime: time.Now(),
+		mu:        sync.Mutex{},
 	}
 }
 
-// AddPlayer 將玩家加入房間
+// AddPlayer 將新的玩家加入房間中
 func (r *Room) AddPlayer(player *Player) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	logger.Output.Info("Start: Attempting to add player %s to room %s", player.Name, r.ID)
-
-	// 檢查玩家是否已經在房間中
-	for _, existingPlayer := range r.Players {
-		if existingPlayer.Name == player.Name {
-			logger.Output.Info("Player %s already exists, updating connection", player.Name)
-			// 關閉舊的連接
-			existingPlayer.Conn.Close()
-			// 更新玩家的連接
-			existingPlayer.Conn = player.Conn
-			// 保持原有的狀態（如準備狀態等）
-			return nil
-		}
-	}
-
-	// 檢查玩家數量限制
 	if len(r.Players) >= MaxPlayers {
-		logger.Output.Error("Failed: Room %s is full", r.ID)
 		return errors.New(ErrorMessages[ErrCodeRoomFull])
 	}
-
-	// 加入新玩家
 	r.Players[player.ID] = player
-	logger.Output.Info("Player map updated: %v", r.Players)
-
-	// 如果是第一個玩家，設置為房主
-	if len(r.Players) == 1 {
-		r.Host = player.ID
-		player.IsHost = true
-		logger.Output.Info("Set player %s as host of room %s", player.Name, r.ID)
-	}
-
-	logger.Output.Info("[Success: Player %s (ID: %s) added to room %s. Total players: %d",
-		player.Name, player.ID, r.ID, len(r.Players))
-
 	return nil
 }
 
-// RemovePlayer 從房間移除玩家
+// RemovePlayer 從房間中移除玩家
 func (r *Room) RemovePlayer(playerID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	delete(r.Players, playerID)
+}
 
-	if player, exists := r.Players[playerID]; exists {
-		logger.Output.Info("Removing player %s from room %s", player.Name, r.ID)
-		delete(r.Players, playerID)
-
-		// 如果移除的是房主且還有其他玩家，選擇新房主
-		if playerID == r.Host && len(r.Players) > 0 {
-			// 選擇第一個玩家作為新房主
-			for newHostID, newHost := range r.Players {
-				r.Host = newHostID
-				newHost.IsHost = true
-				logger.Output.Info("New host selected: %s", newHost.Name)
-				break
-			}
+// BroadcastPlayerList 廣播更新後的玩家列表（包含進度與錯誤數）給所有玩家
+func (r *Room) BroadcastPlayerList() {
+	// 複製一份玩家狀態，避免長時間持有鎖
+	r.mu.Lock()
+	playerList := make([]map[string]interface{}, 0, len(r.Players))
+	for _, p := range r.Players {
+		if p.IsHost { // 房主不列入
+			continue
 		}
-
-		logger.Output.Info("Player removed. Remaining players: %d", len(r.Players))
+		progress := 0
+		wrongCount := 0
+		if p.Game != nil {
+			progress = p.Game.Progress
+			wrongCount = p.Game.WrongCount
+		}
+		info := map[string]interface{}{
+			"id":         p.ID,
+			"name":       p.Name,
+			"isHost":     p.IsHost,
+			"isReady":    p.IsReady,
+			"progress":   progress,
+			"wrongCount": wrongCount,
+		}
+		playerList = append(playerList, info)
 	}
+	r.mu.Unlock()
+
+	msg := Message{
+		Type:    MsgTypePlayerList,
+		Payload: playerList,
+	}
+
+	// 對每位玩家發送更新訊息（不在鎖區段中執行 Send）
+	for _, p := range r.Players {
+		if err := p.Send(msg); err != nil {
+			logger.Output.Error("廣播玩家列表給 %s 失敗: %v", p.Name, err)
+		}
+	}
+}
+
+// IsGameStarted 判斷遊戲是否已開始
+func (r *Room) IsGameStarted() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.Status == RoomStatusPlaying
+}
+
+// StartGame 為所有玩家初始化獨立遊戲進度，並廣播初始狀態、遊戲開始訊息
+func (r *Room) StartGame() error {
+	r.mu.Lock()
+
+	// 檢查所有非房主玩家是否皆準備好
+	readyCount := 0
+	for _, p := range r.Players {
+		if !p.IsHost && p.IsReady {
+			readyCount++
+		}
+	}
+	if len(r.Players) < 2 || readyCount < len(r.Players)-1 {
+		r.mu.Unlock()
+		return errors.New("玩家不足或部分玩家尚未準備")
+	}
+
+	// 對每位玩家建立獨立的遊戲進度，但題目相同
+	for _, p := range r.Players {
+		p.Game = NewGame()
+	}
+
+	r.Status = RoomStatusPlaying
+	r.mu.Unlock() // 釋放鎖後再發送訊息
+
+	// 廣播每位玩家的初始遊戲狀態
+	for _, p := range r.Players {
+		state, err := p.Game.GetStatus()
+		if err != nil {
+			logger.Output.Error("取得 %s 遊戲狀態失敗: %v", p.Name, err)
+			continue
+		}
+		gameStatePayload := map[string]interface{}{
+			"quiz":         state.Quiz,
+			"displayColor": state.DisplayColor,
+			"progress":     state.Progress,
+			"wrongCount":   state.WrongCount,
+			"totalQuiz":    state.TotalQuiz,
+			"isFinished":   state.IsFinished,
+		}
+		gameStateMsg := Message{
+			Type:    "game_state",
+			Payload: gameStatePayload,
+		}
+		if err := p.Send(gameStateMsg); err != nil {
+			logger.Output.Error("廣播遊戲狀態給 %s 失敗: %v", p.Name, err)
+		}
+	}
+
+	// 廣播遊戲開始訊息給所有玩家
+	gameStartMsg := Message{
+		Type:    MsgTypeGameStart,
+		Payload: "遊戲開始",
+	}
+	for _, p := range r.Players {
+		if err := p.Send(gameStartMsg); err != nil {
+			logger.Output.Error("通知 %s 遊戲開始失敗: %v", p.Name, err)
+		}
+	}
+
+	logger.Output.Info("房間 %s 遊戲開始, 總玩家數: %d", r.ID, len(r.Players))
+	return nil
+}
+
+// HandleAnswer 處理玩家提交的答案，並更新該玩家獨立的遊戲進度
+func (r *Room) HandleAnswer(playerID, answer string) error {
+	r.mu.Lock()
+	player, exists := r.Players[playerID]
+	if !exists {
+		r.mu.Unlock()
+		return errors.New(ErrorMessages[ErrCodePlayerNotFound])
+	}
+	if player.Game == nil {
+		r.mu.Unlock()
+		return errors.New(ErrorMessages[ErrCodeGameNotStarted])
+	}
+	logger.Output.Info("玩家 %s 提交答案: %s", player.Name, answer)
+
+	// 利用玩家自身的 Game 處理答案
+	correct, finished, err := player.Game.Answer(answer)
+	r.mu.Unlock() // 先釋放鎖
+	logger.Output.Info("處理玩家 %s 提交答案結果: correct=%v, finished=%v, err=%v", player.Name, correct, finished, err)
+
+	if err != nil {
+		logger.Output.Error("處理玩家 %s 提交答案失敗: %v", player.Name, err)
+		return err
+	}
+
+	// 傳送答案結果給該玩家
+	answerResultMsg := Message{
+		Type: "answer_result",
+		Payload: map[string]interface{}{
+			"correct":    correct,
+			"progress":   player.Game.Progress,
+			"wrongCount": player.Game.WrongCount,
+			"isFinished": finished,
+		},
+	}
+	if err := player.Send(answerResultMsg); err != nil {
+		logger.Output.Error("傳送答案結果給 %s 失敗: %v", player.Name, err)
+	}
+
+	// 新增：發送更新後的遊戲狀態（包含最新題目等資訊）
+	state, err := player.Game.GetStatus()
+	if err != nil {
+		logger.Output.Error("取得 %s 遊戲狀態失敗: %v", player.Name, err)
+	} else {
+		updatedGameStateMsg := Message{
+			Type: "game_state",
+			Payload: map[string]interface{}{
+				"quiz":         state.Quiz,
+				"displayColor": state.DisplayColor,
+				"progress":     state.Progress,
+				"wrongCount":   state.WrongCount,
+				"totalQuiz":    state.TotalQuiz,
+				"isFinished":   state.IsFinished,
+			},
+		}
+		if err := player.Send(updatedGameStateMsg); err != nil {
+			logger.Output.Error("更新遊戲狀態給 %s 失敗: %v", player.Name, err)
+		}
+	}
+
+	// 廣播更新後的玩家列表（狀態）
+	r.BroadcastPlayerList()
+
+	return nil
 }
 
 // 廣播消息給所有玩家
@@ -95,38 +223,6 @@ func (r *Room) Broadcast(msg Message) {
 	for _, player := range r.Players {
 		player.Send(msg)
 	}
-}
-
-// 向房間內所有玩家廣播最新的玩家列表
-func (r *Room) BroadcastPlayerList() {
-	playerList := r.GetPlayerList()
-	logger.Output.Info("Broadcasting updated player list")
-
-	r.Broadcast(Message{
-		Type:    "player_list",
-		Payload: playerList,
-	})
-}
-
-// 返回當前房間的玩家列表
-func (r *Room) GetPlayerList() []map[string]interface{} {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	playerList := make([]map[string]interface{}, 0)
-	for _, p := range r.Players {
-		if !p.IsHost { // 只返回非房主玩家
-			playerInfo := map[string]interface{}{
-				"id":      p.ID,
-				"name":    p.Name,
-				"isHost":  p.IsHost,
-				"isReady": p.IsReady,
-			}
-			playerList = append(playerList, playerInfo)
-		}
-	}
-
-	return playerList
 }
 
 // 處理房間消息
@@ -157,134 +253,46 @@ func (r *Room) HandleMessage(playerID string, msg Message) error {
 		r.BroadcastPlayerList()
 		return nil
 
-	case MsgTypeStartGame:
+	case MsgTypeGameStart:
 		if !player.IsHost {
 			logger.Output.Error("Non-host player tried to start game")
 			return errors.New(ErrorMessages[ErrCodeNotHost])
 		}
 		return r.StartGame()
 
+	case MsgTypeRestartGame:
+		if !player.IsHost {
+			logger.Output.Error("Non-host player tried to restart game")
+			return errors.New(ErrorMessages[ErrCodeNotHost])
+		}
+		return r.RestartGame()
+
 	default:
 		return fmt.Errorf("未知的消息類型: %s", msg.Type)
 	}
 }
 
-// 開始遊戲
-func (r *Room) StartGame() error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	logger.Output.Info("[StartGame] Attempting to start game in room %s", r.ID)
-
-	// 檢查遊戲狀態
-	if r.Status == RoomStatusPlaying {
-		logger.Output.Error("[StartGame] Game already in progress")
-		return errors.New(ErrorMessages[ErrCodeGameInProgress])
-	}
-
-	// 檢查玩家數量（不包括房主）
-	readyPlayers := 0
-	totalPlayers := 0
-	for _, p := range r.Players {
-		if !p.IsHost {
-			totalPlayers++
-			if p.IsReady {
-				readyPlayers++
-			}
-		}
-	}
-
-	logger.Output.Info("[StartGame] Total players: %d, Ready players: %d", totalPlayers, readyPlayers)
-
-	// 檢查玩家數量
-	if totalPlayers < MinPlayers {
-		logger.Output.Error("[StartGame] Not enough players")
-		return errors.New(ErrorMessages[ErrCodeNotEnoughPlayers])
-	}
-
-	// 檢查是否所有玩家都準備好
-	if readyPlayers < totalPlayers {
-		logger.Output.Error("[StartGame] Not all players are ready")
-		return errors.New(ErrorMessages[ErrCodeNotReady])
-	}
-
-	// 開始遊戲
-	r.Status = RoomStatusPlaying
-	r.StartTime = time.Now()
-
-	// 廣播遊戲開始消息
-	startGameMsg := Message{
-		Type: MsgTypeStartGame,
-		Payload: map[string]interface{}{
-			"status":    string(r.Status),
-			"startTime": r.StartTime,
-		},
-	}
-
-	logger.Output.Info("[StartGame] Broadcasting game start message")
-	r.Broadcast(startGameMsg)
-
-	logger.Output.Info("[StartGame] Game started successfully in room %s", r.ID)
-	return nil
-}
-
-// RestartGame 重新開始遊戲
-func (r *Room) RestartGame() {
+// RestartGame 重置每位玩家的遊戲狀態，並發送重新開始的通知
+func (r *Room) RestartGame() error {
 	r.mu.Lock()
 	r.Status = RoomStatusWaiting
 	for _, p := range r.Players {
-		p.ResetGame()
+		p.ResetGame() // 每位玩家自行重置遊戲狀態
 	}
 	r.mu.Unlock()
+
+	restartMsg := Message{
+		Type:    "game_restart",
+		Payload: "遊戲重新開始",
+	}
+	for _, p := range r.Players {
+		if err := p.Send(restartMsg); err != nil {
+			logger.Output.Error("傳送重新開始訊息給 %s 失敗: %v", p.Name, err)
+		}
+	}
 	r.BroadcastPlayerList()
-}
-
-// 檢查遊戲是否已開始
-func (r *Room) IsGameStarted() bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.Status == RoomStatusPlaying
-}
-
-// 處理玩家答案
-func (r *Room) HandleAnswer(playerID string, answer string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	player, exists := r.Players[playerID]
-	if !exists {
-		return errors.New(ErrorMessages[ErrCodePlayerNotFound])
-	}
-
-	if r.Status != RoomStatusPlaying {
-		return errors.New(ErrorMessages[ErrCodeGameNotStarted])
-	}
-
-	correct := CheckAnswer(player.Game.CurrentQuiz, answer)
-	player.UpdateScore(correct)
-
-	if r.CheckGameFinish() {
-		r.Status = RoomStatusFinished
-		r.BroadcastFinalRanking()
-	} else if player.Game.IsFinished {
-		r.BroadcastRanking()
-	} else {
-		r.StartNewRound()
-	}
 
 	return nil
-}
-
-// 開始新回合
-func (r *Room) StartNewRound() {
-	quiz, displayColor := GenerateQuiz()
-	r.Broadcast(Message{
-		Type: MsgTypeGameState,
-		Payload: map[string]interface{}{
-			"quiz":         quiz,
-			"displayColor": displayColor,
-		},
-	})
 }
 
 // 廣播排名
@@ -324,17 +332,5 @@ func (r *Room) CheckGameFinish() bool {
 			return false
 		}
 	}
-	return true
-}
-
-// 生成新題目
-func GenerateQuiz() (string, string) {
-	// TODO: 實現題目生成邏輯
-	return "紅色", "藍色"
-}
-
-// 檢查答案
-func CheckAnswer(quiz string, answer string) bool {
-	// TODO: 實現答案檢查邏輯
 	return true
 }

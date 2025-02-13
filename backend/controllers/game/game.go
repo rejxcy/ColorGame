@@ -29,19 +29,22 @@ func init() {
 	}
 }
 
-// NewGame 創建新遊戲狀態
+// NewGame 創建並初始化一個新遊戲
 func NewGame() *Game {
-	return &Game{
-		QuizList:   make([]string, 0),
-		ColorList:  make([]string, 0),
-		Progress:   0,
+	game := &Game{
+		QuizList:   make([]string, QuizCount),
+		ColorList:  make([]string, QuizCount),
+		WhichQuiz:  0,
 		TotalQuiz:  QuizCount,
 		WrongCount: 0,
 		IsFinished: false,
 		StartTime:  time.Now(),
 	}
+	game.generateColors()
+	return game
 }
 
+// 返回目前遊戲狀態
 func (g *Game) GetStatus() (GameStatus, error) {
 	if g.IsFinished {
 		return GameStatus{
@@ -64,6 +67,7 @@ func (g *Game) GetStatus() (GameStatus, error) {
 	}, nil
 }
 
+// 判斷答案是否正確，並更新遊戲狀態
 func (g *Game) Answer(color string) (bool, bool, error) {
 	if g.IsFinished {
 		return false, true, ErrGameFinished
@@ -76,7 +80,7 @@ func (g *Game) Answer(color string) (bool, bool, error) {
 	correct := color == g.QuizList[g.WhichQuiz]
 	if correct {
 		g.WhichQuiz++
-		if g.WhichQuiz >= len(g.QuizList) {
+		if g.WhichQuiz >= QuizCount {
 			g.IsFinished = true
 			return true, true, nil
 		}
@@ -87,13 +91,16 @@ func (g *Game) Answer(color string) (bool, bool, error) {
 	return correct, g.IsFinished, nil
 }
 
+// 重置遊戲狀態
 func (g *Game) Restart() {
 	g.generateColors()
 	g.WhichQuiz = 0
 	g.WrongCount = 0
 	g.IsFinished = false
+	g.StartTime = time.Now()
 }
 
+// 產生新的題目與顏色列表
 func (g *Game) generateColors() {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i := 0; i < QuizCount; i++ {

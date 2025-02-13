@@ -9,7 +9,7 @@ import (
 	"github.com/rejxcy/logger"
 )
 
-// NewPlayer 創建新玩家
+// NewPlayer 創建新玩家並初始化資料
 func NewPlayer(conn *websocket.Conn, name string, isHost bool) *Player {
 	return &Player{
 		ID:      uuid.New().String(),
@@ -22,12 +22,16 @@ func NewPlayer(conn *websocket.Conn, name string, isHost bool) *Player {
 	}
 }
 
-// Send 發送消息給玩家
+// Send 透過 WriteJSON 發送消息給玩家前先檢查連線是否有效
 func (p *Player) Send(msg Message) error {
+	if p.Conn == nil {
+		logger.Output.Error("連線為 nil")
+		return errors.New("連線為 nil")
+	}
 	return p.Conn.WriteJSON(msg)
 }
 
-// SendError 發送錯誤消息給玩家
+// SendError 發送錯誤消息給客戶端
 func (p *Player) SendError(code string, message string) {
 	p.Send(Message{
 		Type: MsgTypeError,
@@ -38,13 +42,13 @@ func (p *Player) SendError(code string, message string) {
 	})
 }
 
-// HandleMessage 處理玩家消息
+// HandleMessage 根據消息類型分派處理（所有消息均由玩家處理）
 func (p *Player) HandleMessage(msg Message, room *Room) error {
 	switch msg.Type {
-	case "ready":
-		// 房主不能設置準備狀態
+	case MsgTypeReady:
+		// 房主不需要設置準備狀態
 		if p.IsHost {
-			return errors.New("房主不需要準備")
+			return errors.New("房主無需設置準備狀態")
 		}
 		ready, ok := msg.Payload.(bool)
 		if !ok {
@@ -52,20 +56,21 @@ func (p *Player) HandleMessage(msg Message, room *Room) error {
 		}
 		p.IsReady = ready
 		logger.Output.Info("Player %s ready state changed to: %v", p.Name, ready)
-
-		// 廣播玩家列表更新
 		room.BroadcastPlayerList()
 		return nil
+
 	case MsgTypeGameStart:
 		return p.handleGameStart(room)
+
 	case MsgTypeAnswer:
 		return p.handleAnswer(msg.Payload, room)
+
 	default:
 		return errors.New("未知的消息類型")
 	}
 }
 
-// handleGameStart 處理開始遊戲
+// handleGameStart 處理開始遊戲的請求（僅允許房主觸發）
 func (p *Player) handleGameStart(room *Room) error {
 	if !p.IsHost {
 		return errors.New(ErrorMessages[ErrCodeNotHost])
@@ -73,28 +78,26 @@ func (p *Player) handleGameStart(room *Room) error {
 	return room.StartGame()
 }
 
-// handleAnswer 處理答案
+// handleAnswer 處理玩家提交的答案
 func (p *Player) handleAnswer(payload interface{}, room *Room) error {
 	if !room.IsGameStarted() {
 		return errors.New(ErrorMessages[ErrCodeGameNotStarted])
 	}
-
 	answer, ok := payload.(string)
 	if !ok {
 		return errors.New(ErrorMessages[ErrCodeInvalidAnswer])
 	}
-
 	return room.HandleAnswer(p.ID, answer)
 }
 
-// ResetGame 重置玩家遊戲狀態
+// ResetGame 重置玩家遊戲狀態（例如重新開始時使用）
 func (p *Player) ResetGame() {
 	p.Game = NewGame()
 	p.IsReady = false
 	p.Score = 0
 }
 
-// UpdateScore 更新玩家分數
+// UpdateScore 根據答案正確與否更新分數與進度
 func (p *Player) UpdateScore(correct bool) {
 	if correct {
 		p.Score += 10
@@ -102,13 +105,12 @@ func (p *Player) UpdateScore(correct bool) {
 		p.Game.WrongCount++
 	}
 	p.Game.Progress++
-
 	if p.Game.Progress >= p.Game.TotalQuiz {
 		p.Game.IsFinished = true
 	}
 }
 
-// GetRank 獲取玩家排名資訊
+// GetRank 返回玩家排名資訊
 func (p *Player) GetRank() PlayerRank {
 	duration := time.Since(p.Game.StartTime)
 	return PlayerRank{
@@ -121,7 +123,7 @@ func (p *Player) GetRank() PlayerRank {
 	}
 }
 
-// Close 關閉玩家連接
+// Close 安全地關閉玩家連線
 func (p *Player) Close() {
 	if p.Conn != nil {
 		p.Conn.Close()

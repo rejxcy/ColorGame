@@ -8,7 +8,7 @@
     </div>
 
     <div class="main-content">
-      <!-- 遊戲未開始時顯示QRCode和玩家列表 -->
+      <!-- 遊戲未開始時顯示 QR Code 與玩家列表 -->
       <div v-if="gameStatus === 'waiting'" class="waiting-screen">
         <div class="qrcode-section">
           <canvas ref="qrcodeRef"></canvas>
@@ -30,7 +30,7 @@
             </div>
           </div>
           
-          <!-- 添加開始遊戲按鈕 -->
+          <!-- 開始遊戲按鈕僅在所有玩家準備且至少2人時啟用 -->
           <button 
             v-if="canStartGame" 
             class="start-game-button"
@@ -63,26 +63,25 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import QRCode from 'qrcode'
 import { useRouter } from 'vue-router'
-import { GameWebSocket } from '../api/game'
 import { useWebSocket } from '../composables/useWebSocket'
 
 const router = useRouter()
 const roomId = ref('')
 const players = ref([])
-const gameStatus = ref('waiting') // waiting, playing, finished
+// gameStatus 可能值包括："waiting", "playing", "finished"
+const gameStatus = ref('waiting')
 const qrcodeRef = ref(null)
 const ws = useWebSocket()
-const qrCodeUrl = ref('')
 
-// 計算屬性
+// 產生房間連結
 const joinUrl = computed(() => {
   if (!roomId.value) return ''
   return `${window.location.origin}/room/${roomId.value}/join`
 })
 
+// canStartGame 為 computed 屬性，不需手動賦值
 const canStartGame = computed(() => {
-  return players.value.length > 0 && 
-         players.value.every(player => player.isReady)
+  return players.value.length >= 2 && players.value.every(player => player.isReady)
 })
 
 const sortedPlayers = computed(() => {
@@ -94,11 +93,9 @@ const sortedPlayers = computed(() => {
     }))
 })
 
-// 生成QR Code
+// 生成 QR Code
 const generateQRCode = async () => {
-  console.log('Generating QR Code...')
   if (!qrcodeRef.value || !joinUrl.value) return
-  
   try {
     await QRCode.toCanvas(qrcodeRef.value, joinUrl.value, {
       width: 256,
@@ -108,86 +105,51 @@ const generateQRCode = async () => {
         light: '#ffffff'
       }
     })
-    console.log('QR Code generated successfully')
   } catch (err) {
     console.error('生成 QR Code 失敗:', err)
   }
 }
 
-// 開始遊戲
+// 開始遊戲 (透過 WebSocket 通知後端)
 const startGame = () => {
   if (players.value.length < 2) {
     alert('至少需要 2 名玩家才能開始遊戲')
     return
   }
-  
   ws.send({
-    type: 'start_game'
+    type: 'game_start'
   })
 }
 
-// 連接WebSocket
-const connectWebSocket = async () => {
-  try {
-    // 生成房間 ID（如果還沒有的話）
-    if (!roomId.value) {
-      roomId.value = Math.random().toString(36).substring(2, 8).toUpperCase()
-    }
-    console.log('Room ID generated:', roomId.value)
-    
-    // 連接 WebSocket
-    await ws.connect(roomId.value, 'Host', true)
-    console.log('WebSocket connected as host')
-    
-    // 添加消息處理器
-    ws.on(handleWebSocketMessage)
-    
-    // 生成 QR Code
-    await generateQRCode()
-  } catch (err) {
-    console.error('WebSocket 連接失敗:', err)
-  }
-}
-
+// 處理 WebSocket 傳來的訊息
 const handleWebSocketMessage = (data) => {
-  console.log('Host received message:', data)
   switch (data.type) {
     case 'player_list':
-      console.log('Updating player list:', data.payload)
       players.value = data.payload
-      // 檢查是否所有玩家都準備好了
-      const allReady = players.value.length >= 2 && 
-                      players.value.every(player => player.isReady)
-      canStartGame.value = allReady
       break
     case 'game_start':
       gameStatus.value = 'playing'
       break
-    case 'game_end':
+   	case 'game_end':
       gameStatus.value = 'finished'
+      players.value = data.payload // 後端推播最終排名
       break
-    // ... 其他消息處理
+    // 其他消息處理…
   }
 }
 
-const updatePlayerProgress = (progressData) => {
-  const playerIndex = players.value.findIndex(p => p.id === progressData.id)
-  if (playerIndex !== -1) {
-    players.value[playerIndex] = {
-      ...players.value[playerIndex],
-      ...progressData
+// 連接 WebSocket 並初始化房間
+const connectWebSocket = async () => {
+  try {
+    if (!roomId.value) {
+      roomId.value = Math.random().toString(36).substring(2, 8).toUpperCase()
     }
+    await ws.connect(roomId.value, 'Host', true)
+    ws.on(handleWebSocketMessage)
+    await generateQRCode()
+  } catch (err) {
+    console.error('WebSocket 連接失敗:', err)
   }
-}
-
-const handleGameEnd = (rankings) => {
-  gameStatus.value = 'finished'
-  players.value = rankings
-}
-
-const generateJoinLink = () => {
-  const baseUrl = window.location.origin
-  return `${baseUrl}/join/${roomId.value}`
 }
 
 onMounted(async () => {

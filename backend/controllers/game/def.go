@@ -7,39 +7,41 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// 枚舉類型
+// RoomStatus 定義房間狀態類型
 type RoomStatus string
 
-// 常量定義
+// 房間狀態常數
 const (
-	// Room 狀態
 	RoomStatusWaiting  RoomStatus = "waiting"  // 等待玩家加入
 	RoomStatusPlaying  RoomStatus = "playing"  // 遊戲進行中
 	RoomStatusFinished RoomStatus = "finished" // 遊戲結束
+)
 
-	// WebSocket 消息類型
-	MsgTypeAnswer     = "answer"
-	MsgTypeRestart    = "restart"
-	MsgTypeGameState  = "game_state"
-	MsgTypeGameOver   = "game_over"
-	MsgTypeError      = "error"
-	MsgTypeJoinRoom   = "join_room"
-	MsgTypeLeaveRoom  = "leave_room"
-	MsgTypePlayerList = "player_list"
-	MsgTypeGameStart  = "game_start"
-	MsgTypeGameRank   = "game_rank"
-	MsgTypeProgress   = "progress"   // 新增：進度更新
-	MsgTypeReady      = "ready"      // 新增：準備狀態
-	MsgTypeStartGame  = "start_game" // 開始遊戲
+// WebSocket 消息類型常數
+const (
+	MsgTypeAnswer      = "answer"
+	MsgTypeGameState   = "game_state"
+	MsgTypeGameOver    = "game_over"
+	MsgTypeError       = "error"
+	MsgTypeJoinRoom    = "join_room"
+	MsgTypeLeaveRoom   = "leave_room"
+	MsgTypePlayerList  = "player_list"
+	MsgTypeGameStart   = "game_start" // 遊戲開始（由玩家或房主發送）
+	MsgTypeGameRank    = "game_rank"
+	MsgTypeProgress    = "progress"     // 進度更新
+	MsgTypeReady       = "ready"        // 準備狀態
+	MsgTypeRestartGame = "restart_game" // 新增重新開始的消息類型
+)
 
-	// 遊戲相關常數
+// 遊戲相關常數
+const (
 	MaxPlayers    = 10
 	MinPlayers    = 1
 	TimeLimit     = 60
 	AnswerTimeout = 5
 )
 
-// 錯誤碼和訊息
+// 錯誤碼與錯誤訊息
 const (
 	ErrCodeRoomFull         = "room_full"
 	ErrCodeNotHost          = "not_host"
@@ -52,7 +54,6 @@ const (
 	ErrCodeInvalidMessage   = "invalid_message"
 )
 
-// 錯誤訊息
 var ErrorMessages = map[string]string{
 	ErrCodeRoomFull:         "房間已滿",
 	ErrCodeNotHost:          "不是房主",
@@ -65,35 +66,7 @@ var ErrorMessages = map[string]string{
 	ErrCodeInvalidMessage:   "無效的消息",
 }
 
-// 消息類型常數
-const (
-	msgTypeAnswer     = "answer"      // 答案
-	msgTypeRestart    = "restart"     // 重新開始
-	msgTypeGameState  = "game_state"  // 遊戲狀態
-	msgTypeGameOver   = "game_over"   // 遊戲結束
-	msgTypeError      = "error"       // 錯誤
-	msgTypeJoinRoom   = "join_room"   // 加入房間
-	msgTypeLeaveRoom  = "leave_room"  // 離開房間
-	msgTypePlayerList = "player_list" // 玩家列表
-	msgTypeGameStart  = "game_start"  // 遊戲開始
-	msgTypeGameRank   = "game_rank"   // 遊戲排名
-	msgTypeProgress   = "progress"    // 進度更新
-	msgTypeReady      = "ready"       // 準備狀態
-)
-
-// 錯誤訊息
-const (
-	errRoomFull        = "房間已滿"
-	errRoomNotFound    = "房間不存在"
-	errPlayerNotFound  = "玩家不存在"
-	errGameNotStarted  = "遊戲尚未開始"
-	errGameInProgress  = "遊戲進行中"
-	errInvalidAnswer   = "無效的答案"
-	errNotHost         = "只有房主可以執行此操作"
-	errNotEnoughPlayer = "玩家人數不足"
-)
-
-// Game 相關結構
+// Game 相關結構（遊戲內所有狀態與數據）
 type Game struct {
 	QuizList     []string  `json:"quiz_list"`
 	ColorList    []string  `json:"color_list"`
@@ -108,7 +81,7 @@ type Game struct {
 	PlayerID     string    `json:"player_id"`
 }
 
-// 遊戲狀態
+// GameStatus 為前端提供的遊戲狀態資訊
 type GameStatus struct {
 	Quiz         string  `json:"quiz"`
 	DisplayColor string  `json:"displayColor"`
@@ -130,28 +103,28 @@ type Player struct {
 	Game    *Game           `json:"game"`
 }
 
-// Room 相關結構
+// Room 相關結構，包含房間 ID、房主、玩家列表與狀態等
 type Room struct {
-	ID        string             `json:"id"`
-	Host      string             `json:"host"`      // 房主ID
-	Players   map[string]*Player `json:"players"`   // 玩家列表
-	Status    RoomStatus         `json:"status"`    // 房間狀態
-	StartTime time.Time          `json:"startTime"` // 遊戲開始時間
+	ID        string
+	Players   map[string]*Player
+	Status    RoomStatus
+	StartTime time.Time
 	mu        sync.Mutex
 }
 
-// WebSocket 相關結構
+// WSMessage 定義 WebSocket 消息結構
 type WSMessage struct {
 	Type    string      `json:"type"`
 	Payload interface{} `json:"payload"`
 }
 
+// WSError 定義 WebSocket 錯誤結構
 type WSError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 }
 
-// PlayerRank 排名信息
+// PlayerRank 排名資訊結構
 type PlayerRank struct {
 	ID         string        `json:"id"`
 	Name       string        `json:"name"`
@@ -161,13 +134,13 @@ type PlayerRank struct {
 	IsFinished bool          `json:"is_finished"`
 }
 
-// Message 定義 WebSocket 消息結構
+// Message 定義 WebSocket 的消息格式
 type Message struct {
-	Type    string      `json:"type"`    // 消息類型
-	Payload interface{} `json:"payload"` // 消息內容
+	Type    string      `json:"type"`
+	Payload interface{} `json:"payload"`
 }
 
-// GameState 定義遊戲狀態結構
+// GameState 定義遊戲狀態消息結構
 type GameState struct {
 	Quiz         string `json:"quiz"`
 	DisplayColor string `json:"display_color"`
