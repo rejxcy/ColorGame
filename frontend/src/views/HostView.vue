@@ -49,7 +49,7 @@
             <span class="rank-number">{{ player.rank }}</span>
             <span class="player-name">{{ player.name }}</span>
             <div class="progress-bar">
-              <div class="progress-fill" :style="{ width: `${(player.progress / 10) * 100}%` }"></div>
+              <div class="progress-fill" :style="{ width: `${(player.progress / totalQuiz) * 100}%` }"></div>
             </div>
             <span class="player-score">{{ player.score }}</span>
           </div>
@@ -68,6 +68,7 @@ import { useWebSocket } from '../composables/useWebSocket'
 const router = useRouter()
 const roomId = ref('')
 const players = ref([])
+const totalQuiz = ref(0); // 總題數
 // gameStatus 可能值包括："waiting", "playing", "finished"
 const gameStatus = ref('waiting')
 const qrcodeRef = ref(null)
@@ -85,12 +86,7 @@ const canStartGame = computed(() => {
 })
 
 const sortedPlayers = computed(() => {
-  return [...players.value]
-    .sort((a, b) => b.score - a.score)
-    .map((player, index) => ({
-      ...player,
-      rank: index + 1
-    }))
+  return [...players.value].sort((a, b) => b.score - a.score)
 })
 
 // 生成 QR Code
@@ -133,6 +129,10 @@ const handleWebSocketMessage = (data) => {
    	case 'game_end':
       gameStatus.value = 'finished'
       players.value = data.payload // 後端推播最終排名
+      break
+    case 'game_state':
+      totalQuiz.value = data.payload.totalQuiz; // 更新總題數
+      console.log('Updated totalQuiz:', totalQuiz.value); // 確認更新
       break
     // 其他消息處理…
   }

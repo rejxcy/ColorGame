@@ -40,39 +40,46 @@ func (r *Room) RemovePlayer(playerID string) {
 	delete(r.Players, playerID)
 }
 
-// BroadcastPlayerList 廣播更新後的玩家列表（包含進度與錯誤數）給所有玩家
+// BroadcastPlayerList 廣播更新後的玩家列表（包含進度、錯誤數、分數與排名）給所有玩家
 func (r *Room) BroadcastPlayerList() {
-	// 複製一份玩家狀態，避免長時間持有鎖
+	// 複製所有非房主玩家資訊到 slice 中，方便進行排序
 	r.mu.Lock()
-	playerList := make([]map[string]interface{}, 0, len(r.Players))
+	playersSlice := make([]*Player, 0, len(r.Players))
 	for _, p := range r.Players {
-		if p.IsHost { // 房主不列入
+		if p.IsHost {
 			continue
 		}
-		progress := 0
-		wrongCount := 0
-		if p.Game != nil {
-			progress = p.Game.Progress
-			wrongCount = p.Game.WrongCount
-		}
-		info := map[string]interface{}{
-			"id":         p.ID,
-			"name":       p.Name,
-			"isHost":     p.IsHost,
-			"isReady":    p.IsReady,
-			"progress":   progress,
-			"wrongCount": wrongCount,
-		}
-		playerList = append(playerList, info)
+		playersSlice = append(playersSlice, p)
 	}
 	r.mu.Unlock()
 
-	msg := Message{
-		Type:    MsgTypePlayerList,
-		Payload: playerList,
+	// 根據分數進行排序
+	sort.Slice(playersSlice, func(i, j int) bool {
+		if playersSlice[i].Score != playersSlice[j].Score {
+			return playersSlice[i].Score > playersSlice[j].Score // 降序排列
+		}
+		return playersSlice[i].Game.WrongCount < playersSlice[j].Game.WrongCount // 錯誤次數少者排前
+	})
+
+	// 為每位玩家分配排名，並準備要廣播給前端的資料
+	rankingList := make([]map[string]interface{}, 0, len(playersSlice))
+	for idx, p := range playersSlice {
+		rankingList = append(rankingList, map[string]interface{}{
+			"id":         p.ID,
+			"name":       p.Name,
+			"isReady":    p.IsReady,
+			"progress":   p.Game.Progress,
+			"wrongCount": p.Game.WrongCount,
+			"score":      p.Score,
+			"rank":       idx + 1,
+		})
 	}
 
-	// 對每位玩家發送更新訊息（不在鎖區段中執行 Send）
+	// 將整個玩家列表（含排名資訊）發送給所有連線的玩家
+	msg := Message{
+		Type:    MsgTypePlayerList,
+		Payload: rankingList,
+	}
 	for _, p := range r.Players {
 		if err := p.Send(msg); err != nil {
 			logger.Output.Error("廣播玩家列表給 %s 失敗: %v", p.Name, err)
@@ -166,6 +173,9 @@ func (r *Room) HandleAnswer(playerID, answer string) error {
 
 	// 利用玩家自身的 Game 處理答案
 	correct, finished, err := player.Game.Answer(answer)
+	// 更新玩家分數
+	player.UpdateScore(correct)
+	
 	r.mu.Unlock() // 先釋放鎖
 	logger.Output.Info("處理玩家 %s 提交答案結果: correct=%v, finished=%v, err=%v", player.Name, correct, finished, err)
 
@@ -293,36 +303,6 @@ func (r *Room) RestartGame() error {
 	r.BroadcastPlayerList()
 
 	return nil
-}
-
-// 廣播排名
-func (r *Room) BroadcastRanking() {
-	rankings := r.GetRankings()
-	r.Broadcast(Message{
-		Type:    MsgTypeGameRank,
-		Payload: rankings,
-	})
-}
-
-// 廣播最終排名
-func (r *Room) BroadcastFinalRanking() {
-	r.BroadcastRanking()
-}
-
-// 獲取排名列表
-func (r *Room) GetRankings() []PlayerRank {
-	rankings := make([]PlayerRank, 0, len(r.Players))
-	for _, p := range r.Players {
-		rankings = append(rankings, p.GetRank())
-	}
-
-	sort.Slice(rankings, func(i, j int) bool {
-		if rankings[i].Score != rankings[j].Score {
-			return rankings[i].Score > rankings[j].Score
-		}
-		return rankings[i].Duration < rankings[j].Duration
-	})
-	return rankings
 }
 
 // 檢查遊戲是否結束

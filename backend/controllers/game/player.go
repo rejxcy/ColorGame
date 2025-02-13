@@ -102,7 +102,8 @@ func (p *Player) UpdateScore(correct bool) {
 	if correct {
 		p.Score += 10
 	} else {
-		p.Game.WrongCount++
+		p.Game.WrongCount ++
+		p.Score -= 5
 	}
 	p.Game.Progress++
 	if p.Game.Progress >= p.Game.TotalQuiz {

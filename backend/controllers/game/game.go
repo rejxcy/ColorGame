@@ -34,7 +34,6 @@ func NewGame() *Game {
 	game := &Game{
 		QuizList:   make([]string, QuizCount),
 		ColorList:  make([]string, QuizCount),
-		WhichQuiz:  0,
 		TotalQuiz:  QuizCount,
 		WrongCount: 0,
 		IsFinished: false,
@@ -57,10 +56,10 @@ func (g *Game) GetStatus() (GameStatus, error) {
 	}
 
 	return GameStatus{
-		Quiz:         g.QuizList[g.WhichQuiz],
-		DisplayColor: g.ColorList[g.WhichQuiz],
-		Progress:     g.WhichQuiz,
-		Percentage:   float64(g.WhichQuiz) / float64(QuizCount) * 100,
+		Quiz:         g.QuizList[g.Progress],
+		DisplayColor: g.ColorList[g.Progress],
+		Progress:     g.Progress,
+		Percentage:   float64(g.Progress) / float64(QuizCount) * 100,
 		WrongCount:   g.WrongCount,
 		IsFinished:   g.IsFinished,
 		TotalQuiz:    QuizCount,
@@ -77,24 +76,20 @@ func (g *Game) Answer(color string) (bool, bool, error) {
 		return false, false, ErrInvalidColor
 	}
 
-	correct := color == g.QuizList[g.WhichQuiz]
+	correct := color == g.QuizList[g.Progress]
 	if correct {
-		g.WhichQuiz++
-		if g.WhichQuiz >= QuizCount {
+		if g.Progress >= QuizCount {
 			g.IsFinished = true
 			return true, true, nil
 		}
-	} else {
-		g.WrongCount++
 	}
-
 	return correct, g.IsFinished, nil
 }
 
 // 重置遊戲狀態
 func (g *Game) Restart() {
 	g.generateColors()
-	g.WhichQuiz = 0
+	g.Progress = 0
 	g.WrongCount = 0
 	g.IsFinished = false
 	g.StartTime = time.Now()

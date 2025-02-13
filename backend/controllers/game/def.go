@@ -70,14 +70,12 @@ var ErrorMessages = map[string]string{
 type Game struct {
 	QuizList     []string  `json:"quiz_list"`
 	ColorList    []string  `json:"color_list"`
-	CurrentQuiz  string    `json:"current_quiz"`
 	DisplayColor string    `json:"display_color"`
 	Progress     int       `json:"progress"`
 	TotalQuiz    int       `json:"total_quiz"`
 	WrongCount   int       `json:"wrong_count"`
 	IsFinished   bool      `json:"is_finished"`
 	StartTime    time.Time `json:"start_time"`
-	WhichQuiz    int       `json:"which_quiz"`
 	PlayerID     string    `json:"player_id"`
 }
 
