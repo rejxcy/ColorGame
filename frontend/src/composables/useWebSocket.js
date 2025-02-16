@@ -3,7 +3,8 @@ import { ref } from 'vue'
 // 使用單例模式來保持連接狀態
 let wsInstance = null
 
-export function useWebSocket() {
+export const useWebSocket = () => {
+  const ws = ref(null)
   const isConnected = ref(false)
   const messageHandlers = new Set()
   
@@ -12,34 +13,19 @@ export function useWebSocket() {
     return wsInstance
   }
 
-  const connect = async (roomId, playerName, isHost) => {
+  const connect = (roomId, playerName, isHost) => {
     return new Promise((resolve, reject) => {
-      if (!roomId || !playerName) {
-        reject(new Error('房間ID和玩家名稱不能為空'))
-        return
-      }
-
       try {
-        // 檢查現有連接
-        if (ws.value && ws.value.readyState === WebSocket.OPEN) {
-          console.log('Reusing existing WebSocket connection')
-          resolve()
-          return
-        }
-
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-        const wsHost = import.meta.env.VITE_WS_HOST || 'localhost:8080'
-        
+        // 使用當前主機名來建立連線
+        const wsUrl = `ws://${window.location.hostname}:8080/api/game/ws`
         const params = new URLSearchParams({
           room_id: roomId,
           player_name: playerName,
-          is_host: isHost.toString()
+          is_host: isHost
         })
-        
-        const wsUrl = `${wsProtocol}//${wsHost}/api/game/ws?${params.toString()}`
-        console.log('Connecting to WebSocket:', wsUrl)
-        
-        ws.value = new WebSocket(wsUrl)
+
+        console.log('Connecting to WebSocket:', `${wsUrl}?${params}`)
+        ws.value = new WebSocket(`${wsUrl}?${params}`)
 
         ws.value.onopen = () => {
           console.log('WebSocket connected successfully')
@@ -69,7 +55,7 @@ export function useWebSocket() {
           }
         }
       } catch (err) {
-        console.error('Failed to initialize WebSocket:', err)
+        console.error('Failed to create WebSocket:', err)
         isConnected.value = false
         reject(err)
       }
