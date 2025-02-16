@@ -42,7 +42,7 @@
       </div>
 
       <!-- 遊戲進行中顯示排行榜 -->
-      <div v-else class="game-progress">
+      <div v-else-if="gameStatus === 'playing'" class="game-progress">
         <h2>遊戲進行中</h2>
         <div class="ranking-list">
           <div v-for="player in sortedPlayers" :key="player.id" class="ranking-item">
@@ -54,6 +54,11 @@
             <span class="player-score">{{ player.score }}</span>
           </div>
         </div>
+      </div>
+
+      <div v-else-if="gameStatus === 'finished'" class="game-end">
+        <h2>遊戲結束</h2>
+        <button @click="gameReset" class="restart-button">重新開始</button>
       </div>
     </div>
   </div>
@@ -80,12 +85,20 @@ const joinUrl = computed(() => {
   return `${window.location.origin}/room/${roomId.value}/join`
 })
 
-// canStartGame 為 computed 屬性，不需手動賦值
+// 添加類型檢查，確保即使數據異常也不會報錯
 const canStartGame = computed(() => {
+  if (!Array.isArray(players.value)) {
+    console.warn('players.value is not an array:', players.value)
+    return false
+  }
   return players.value.length >= 2 && players.value.every(player => player.isReady)
 })
 
 const sortedPlayers = computed(() => {
+  if (!Array.isArray(players.value)) {
+    console.warn('players.value is not an array:', players.value)
+    return []
+  }
   return [...players.value].sort((a, b) => b.score - a.score)
 })
 
@@ -106,7 +119,7 @@ const generateQRCode = async () => {
   }
 }
 
-// 開始遊戲 (透過 WebSocket 通知後端)
+// 開始遊戲
 const startGame = () => {
   if (players.value.length < 2) {
     alert('至少需要 2 名玩家才能開始遊戲')
@@ -117,24 +130,36 @@ const startGame = () => {
   })
 }
 
+// 重置遊戲
+const gameReset = () => {
+  ws.send({
+    type: 'game_reset'
+  })
+}
+
 // 處理 WebSocket 傳來的訊息
 const handleWebSocketMessage = (data) => {
   switch (data.type) {
     case 'player_list':
       players.value = data.payload
+      // 當遊戲狀態為 waiting 時，確保 QR Code 存在
+      if (gameStatus.value === 'waiting') {
+        generateQRCode()
+      }
       break
     case 'game_start':
       gameStatus.value = 'playing'
       break
-   	case 'game_end':
+    case 'game_end':
       gameStatus.value = 'finished'
-      players.value = data.payload // 後端推播最終排名
+      players.value = data.payload
       break
     case 'game_state':
-      totalQuiz.value = data.payload.totalQuiz; // 更新總題數
-      console.log('Updated totalQuiz:', totalQuiz.value); // 確認更新
+      totalQuiz.value = data.payload.totalQuiz
       break
-    // 其他消息處理…
+    case 'game_reset':
+      gameStatus.value = 'waiting'
+      break
   }
 }
 
@@ -320,6 +345,21 @@ onUnmounted(() => {
 .player-score {
   min-width: 60px;
   text-align: right;
+}
+
+.restart-button {
+  padding: 12px 24px;
+  font-size: 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background-color: #4CAF50;
+  color: white;
+  transition: background-color 0.3s;
+}
+
+.restart-button:hover {
+  background-color: #45a049;
 }
 
 @media (max-width: 768px) {

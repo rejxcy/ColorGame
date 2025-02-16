@@ -62,7 +62,7 @@ const handleJoin = async () => {
     })
   } catch (err) {
     console.error('加入遊戲失敗:', err)
-    alert('無法連接到遊戲服務器，請稍後再試')
+    alert(`無法連接到遊戲，請稍後再試試: ${err.message || err}`);
   } finally {
     isConnecting.value = false
   }

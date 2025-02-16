@@ -25,12 +25,15 @@
 
     <!-- 遊戲進行中 -->
     <template v-else>
+      <!-- 當前玩家的遊戲信息 -->
       <div class="game-info">
         <div class="score">得分：{{ currentPlayer?.score || 0 }}</div>
         <div class="progress">進度：{{ gameState.progress }}/{{ gameState.totalQuiz }}</div>
         <div class="wrong-count">錯誤：{{ gameState.wrongCount }}</div>
       </div>
       
+      
+      <!-- 遊戲主要內容 -->
       <div class="quiz-container">
         <p v-if="gameState.quiz" 
            class="quiz" 
@@ -49,8 +52,20 @@
         />
       </div>
 
+      <!-- 所有玩家的進度排行 -->
+      <div class="ranking-list">
+        <div v-for="player in sortedPlayers" :key="player.name" class="ranking-item">
+          <span class="rank-number">{{ player.rank }}</span>
+          <span class="player-name">{{ player.name }}</span>
+          <div class="progress-bar">
+            <div class="progress-fill" :style="{ width: `${(player.progress / gameState.totalQuiz) * 100}%` }"></div>
+          </div>
+          <span class="player-score">{{ player.score }}</span>
+        </div>
+      </div>
+
       <!-- 遊戲結束 -->
-      <div v-if="gameState.isFinished" class="game-over">
+      <div v-if="gameState.isFinished" class="game-end">
         <h2>遊戲結束！</h2>
         <div class="ranking-list">
           <div v-for="rank in rankings" :key="rank.id" class="ranking-item">
@@ -86,7 +101,9 @@ const gameStarted = ref(false)
 const isReady = ref(false)
 const isConnecting = ref(false)
 const players = ref([])
+const score = ref(0)
 const gameState = ref({
+  name: '',
   quiz: '',
   displayColor: '',
   progress: 0,
@@ -101,11 +118,25 @@ const rankings = ref([])
 const validColors = ['red', 'green', 'blue', 'yellow', 'orange', 'purple']
 
 // 計算屬性
-const currentPlayer = computed(() => 
-  players.value.find(p => p.id === route.query.playerId)
-)
 
 const isHost = computed(() => currentPlayer.value?.isHost || false)
+
+// 添加排序玩家的計算屬性
+const sortedPlayers = computed(() => {
+  if (!Array.isArray(players.value)) return []
+  return [...players.value]
+    .sort((a, b) => b.score - a.score)
+    .map((player, index) => ({
+      ...player,
+      rank: index + 1
+    }))
+})
+
+// 計算屬性：獲取當前玩家的資訊
+const currentPlayer = computed(() => {
+  if (!gameState.value.name || !players.value) return null
+  return players.value.find(p => p.name === gameState.value.name)
+})
 
 // 確保 WebSocket 連接
 const ensureConnection = async () => {
@@ -180,16 +211,22 @@ const handleWebSocketMessage = (data) => {
     case 'player_list':
       console.log('Updating player list:', data.payload)
       players.value = data.payload
-      // 使用 playerId 來確保只更新當前玩家的準備狀態
-      const currentPlayerData = data.payload.find(
-        p => p.id === route.query.playerId
-      )
-      if (currentPlayerData) {
-        console.log(`Found current player (ID: ${route.query.playerId}), ready state:`, currentPlayerData.isReady)
-        // 只有當找到當前玩家時才更新準備狀態
-        isReady.value = currentPlayerData.isReady
-      } else {
-        console.log('Current player not found in updated list')
+
+      // 只有在已經有玩家名稱的情況下才更新玩家狀態
+      if (gameState.value.name) {
+        const currentPlayerData = data.payload.find(
+          p => p.name === gameState.value.name
+        )
+        if (currentPlayerData) {
+          console.log(`Found current player:`, currentPlayerData)
+          isReady.value = currentPlayerData.isReady
+          // gameState 也需要更新相關資訊
+          gameState.value = {
+            ...gameState.value,
+            progress: currentPlayerData.progress,
+            wrongCount: currentPlayerData.wrongCount
+          }
+        }
       }
       break
     case 'game_start':
@@ -198,8 +235,8 @@ const handleWebSocketMessage = (data) => {
     case 'game_state':
       gameState.value = data.payload
       break
-    case 'rankings':
-      rankings.value = data.payload
+    case 'game_reset':
+      gameStarted.value = false
       break
     case 'error':
       console.error('收到錯誤消息:', data.payload)
@@ -308,23 +345,51 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
-.game-over {
+.game-end {
   text-align: center;
   margin-top: 40px;
 }
 
 .ranking-list {
   margin: 20px 0;
+  padding: 10px;
+  background: #f5f5f5;
+  border-radius: 8px;
 }
 
 .ranking-item {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 15px;
   padding: 10px;
   margin: 5px 0;
-  background: #f5f5f5;
+  background: white;
   border-radius: 5px;
+}
+
+.rank-number {
+  width: 30px;
+  text-align: center;
+  font-weight: bold;
+}
+
+.progress-bar {
+  flex-grow: 1;
+  height: 20px;
+  background: #e0e0e0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #4CAF50;
+  transition: width 0.3s ease;
+}
+
+.player-score {
+  min-width: 60px;
+  text-align: right;
 }
 
 .restart-button {

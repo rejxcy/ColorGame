@@ -126,6 +126,7 @@ func (r *Room) StartGame() error {
 			continue
 		}
 		gameStatePayload := map[string]interface{}{
+			"name":         p.Name,
 			"quiz":         state.Quiz,
 			"displayColor": state.DisplayColor,
 			"progress":     state.Progress,
@@ -192,6 +193,7 @@ func (r *Room) HandleAnswer(playerID, answer string) error {
 		updatedGameStateMsg := Message{
 			Type: "game_state",
 			Payload: map[string]interface{}{
+				"name":         player.Name,
 				"quiz":         state.Quiz,
 				"displayColor": state.DisplayColor,
 				"progress":     state.Progress,
@@ -213,7 +215,7 @@ func (r *Room) HandleAnswer(playerID, answer string) error {
 			Payload: "遊戲結束",
 		})
 	}
-	
+
 	// 廣播更新後的玩家列表（狀態）
 	r.BroadcastPlayerList()
 	return nil
