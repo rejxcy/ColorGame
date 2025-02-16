@@ -49,6 +49,11 @@ const handleJoin = async () => {
   
   try {
     isConnecting.value = true
+    
+    // 使用當前主機名來建立連線
+    const wsUrl = `ws://${window.location.hostname}:8080/api/game/ws`
+    console.log('Attempting to connect to:', wsUrl)
+    
     await ws.connect(route.params.roomId, playerName.value, false)
     
     // 保存玩家信息
