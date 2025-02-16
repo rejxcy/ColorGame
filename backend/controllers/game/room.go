@@ -110,7 +110,7 @@ func (r *Room) StartGame() error {
 		return errors.New("玩家不足或部分玩家尚未準備")
 	}
 
-	// 對每位玩家建立獨立的遊戲進度，但題目相同
+	// 對每位玩家建立獨立的遊戲進度
 	for _, p := range r.Players {
 		p.Game = NewGame()
 	}
@@ -153,7 +153,7 @@ func (r *Room) StartGame() error {
 		}
 	}
 
-	logger.Output.Info("房間 %s 遊戲開始, 總玩家數: %d", r.ID, len(r.Players))
+	logger.Output.Info("房間 %s 遊戲開始, 總玩家數: %d", r.ID, len(r.Players)-1)
 	return nil
 }
 
@@ -172,31 +172,17 @@ func (r *Room) HandleAnswer(playerID, answer string) error {
 	logger.Output.Info("玩家 %s 提交答案: %s", player.Name, answer)
 
 	// 利用玩家自身的 Game 處理答案
-	correct, finished, err := player.Game.Answer(answer)
+	correct, err := player.Game.Answer(answer)
 	// 更新玩家分數
 	player.UpdateScore(correct)
 	
-	r.mu.Unlock() // 先釋放鎖
-	logger.Output.Info("處理玩家 %s 提交答案結果: correct=%v, finished=%v, err=%v", player.Name, correct, finished, err)
+	r.mu.Unlock()
 
 	if err != nil {
 		logger.Output.Error("處理玩家 %s 提交答案失敗: %v", player.Name, err)
 		return err
 	}
 
-	// 傳送答案結果給該玩家
-	answerResultMsg := Message{
-		Type: "answer_result",
-		Payload: map[string]interface{}{
-			"correct":    correct,
-			"progress":   player.Game.Progress,
-			"wrongCount": player.Game.WrongCount,
-			"isFinished": finished,
-		},
-	}
-	if err := player.Send(answerResultMsg); err != nil {
-		logger.Output.Error("傳送答案結果給 %s 失敗: %v", player.Name, err)
-	}
 
 	// 新增：發送更新後的遊戲狀態（包含最新題目等資訊）
 	state, err := player.Game.GetStatus()
@@ -219,9 +205,17 @@ func (r *Room) HandleAnswer(playerID, answer string) error {
 		}
 	}
 
+	// 檢查遊戲是否結束
+	if r.gameFinish() {
+		logger.Output.Info("遊戲結束，廣播結束訊息")
+		r.Broadcast(Message{
+			Type: MsgTypeGameEnd,
+			Payload: "遊戲結束",
+		})
+	}
+	
 	// 廣播更新後的玩家列表（狀態）
 	r.BroadcastPlayerList()
-
 	return nil
 }
 
@@ -270,12 +264,12 @@ func (r *Room) HandleMessage(playerID string, msg Message) error {
 		}
 		return r.StartGame()
 
-	case MsgTypeRestartGame:
+	case MsgTypeGameReset:
 		if !player.IsHost {
 			logger.Output.Error("Non-host player tried to restart game")
 			return errors.New(ErrorMessages[ErrCodeNotHost])
 		}
-		return r.RestartGame()
+		return r.GameReset()
 
 	default:
 		return fmt.Errorf("未知的消息類型: %s", msg.Type)
@@ -283,7 +277,7 @@ func (r *Room) HandleMessage(playerID string, msg Message) error {
 }
 
 // RestartGame 重置每位玩家的遊戲狀態，並發送重新開始的通知
-func (r *Room) RestartGame() error {
+func (r *Room) GameReset() error {
 	r.mu.Lock()
 	r.Status = RoomStatusWaiting
 	for _, p := range r.Players {
@@ -291,24 +285,21 @@ func (r *Room) RestartGame() error {
 	}
 	r.mu.Unlock()
 
-	restartMsg := Message{
-		Type:    "game_restart",
+	gameResetMsg := Message{
+		Type:    MsgTypeGameReset,
 		Payload: "遊戲重新開始",
 	}
-	for _, p := range r.Players {
-		if err := p.Send(restartMsg); err != nil {
-			logger.Output.Error("傳送重新開始訊息給 %s 失敗: %v", p.Name, err)
-		}
-	}
+	r.Broadcast(gameResetMsg)
+
 	r.BroadcastPlayerList()
 
 	return nil
 }
 
 // 檢查遊戲是否結束
-func (r *Room) CheckGameFinish() bool {
+func (r *Room) gameFinish() bool {
 	for _, p := range r.Players {
-		if !p.Game.IsFinished {
+		if !p.IsHost && !p.Game.IsFinished {
 			return false
 		}
 	}

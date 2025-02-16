@@ -67,23 +67,22 @@ func (g *Game) GetStatus() (GameStatus, error) {
 }
 
 // 判斷答案是否正確，並更新遊戲狀態
-func (g *Game) Answer(color string) (bool, bool, error) {
+func (g *Game) Answer(color string) (bool, error) {
 	if g.IsFinished {
-		return false, true, ErrGameFinished
+		return false, ErrGameFinished
 	}
 
 	if !isValidColor(color) {
-		return false, false, ErrInvalidColor
+		return false, ErrInvalidColor
 	}
 
 	correct := color == g.QuizList[g.Progress]
 	if correct {
 		if g.Progress >= QuizCount {
 			g.IsFinished = true
-			return true, true, nil
 		}
 	}
-	return correct, g.IsFinished, nil
+	return correct, nil
 }
 
 // 重置遊戲狀態

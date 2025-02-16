@@ -21,7 +21,7 @@ const (
 const (
 	MsgTypeAnswer      = "answer"
 	MsgTypeGameState   = "game_state"
-	MsgTypeGameOver    = "game_over"
+	MsgTypeGameEnd     = "game_end"
 	MsgTypeError       = "error"
 	MsgTypeJoinRoom    = "join_room"
 	MsgTypeLeaveRoom   = "leave_room"
@@ -30,7 +30,7 @@ const (
 	MsgTypeGameRank    = "game_rank"
 	MsgTypeProgress    = "progress"     // 進度更新
 	MsgTypeReady       = "ready"        // 準備狀態
-	MsgTypeRestartGame = "restart_game" // 新增重新開始的消息類型
+	MsgTypeGameReset   = "game_reset"   // 新增重新開始的消息類型
 )
 
 // 遊戲相關常數

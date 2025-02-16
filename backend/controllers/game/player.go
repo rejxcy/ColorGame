@@ -2,7 +2,6 @@ package game
 
 import (
 	"errors"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -65,6 +64,9 @@ func (p *Player) HandleMessage(msg Message, room *Room) error {
 	case MsgTypeAnswer:
 		return p.handleAnswer(msg.Payload, room)
 
+	case MsgTypeGameReset:
+		return p.handleGameReset(room)
+
 	default:
 		return errors.New("未知的消息類型")
 	}
@@ -90,6 +92,14 @@ func (p *Player) handleAnswer(payload interface{}, room *Room) error {
 	return room.HandleAnswer(p.ID, answer)
 }
 
+// handleGameReset 處理重置遊戲的請求（僅允許房主觸發）
+func (p *Player) handleGameReset(room *Room) error {
+	if !p.IsHost {
+		return errors.New(ErrorMessages[ErrCodeNotHost])
+	}
+	return room.GameReset()
+}
+
 // ResetGame 重置玩家遊戲狀態（例如重新開始時使用）
 func (p *Player) ResetGame() {
 	p.Game = NewGame()
@@ -101,26 +111,13 @@ func (p *Player) ResetGame() {
 func (p *Player) UpdateScore(correct bool) {
 	if correct {
 		p.Score += 10
+		p.Game.Progress++
 	} else {
 		p.Game.WrongCount ++
 		p.Score -= 5
 	}
-	p.Game.Progress++
 	if p.Game.Progress >= p.Game.TotalQuiz {
 		p.Game.IsFinished = true
-	}
-}
-
-// GetRank 返回玩家排名資訊
-func (p *Player) GetRank() PlayerRank {
-	duration := time.Since(p.Game.StartTime)
-	return PlayerRank{
-		ID:         p.ID,
-		Name:       p.Name,
-		Score:      p.Score,
-		WrongCount: p.Game.WrongCount,
-		Duration:   duration,
-		IsFinished: p.Game.IsFinished,
 	}
 }
 
