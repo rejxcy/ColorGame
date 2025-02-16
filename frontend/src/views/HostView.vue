@@ -58,6 +58,15 @@
 
       <div v-else-if="gameStatus === 'finished'" class="game-end">
         <h2>遊戲結束</h2>
+        <div class="final-ranking-list">
+          <div v-for="player in sortedPlayers" :key="player.id" class="final-ranking-item">
+            <div class="rank-badge">{{ player.rank }}</div>
+            <div class="player-info">
+              <span class="player-name">{{ player.name }}</span>
+              <span class="final-score">{{ player.score }} 分</span>
+            </div>
+          </div>
+        </div>
         <button @click="gameReset" class="restart-button">重新開始</button>
       </div>
     </div>
@@ -347,19 +356,102 @@ onUnmounted(() => {
   text-align: right;
 }
 
+.game-end {
+  text-align: center;
+  padding: 20px;
+}
+
+.game-end h2 {
+  color: #2c3e50;
+  margin-bottom: 30px;
+  font-size: 28px;
+}
+
+.final-ranking-list {
+  max-width: 500px;
+  margin: 0 auto 30px;
+}
+
+.final-ranking-item {
+  display: flex;
+  align-items: center;
+  padding: 15px;
+  margin: 10px 0;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s;
+}
+
+.final-ranking-item:hover {
+  transform: translateY(-2px);
+}
+
+.rank-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 20px;
+  margin-right: 20px;
+}
+
+/* 為前三名設置特殊樣式 */
+.final-ranking-item:nth-child(1) .rank-badge {
+  background: #FFD700;
+  color: #fff;
+}
+
+.final-ranking-item:nth-child(2) .rank-badge {
+  background: #C0C0C0;
+  color: #fff;
+}
+
+.final-ranking-item:nth-child(3) .rank-badge {
+  background: #CD7F32;
+  color: #fff;
+}
+
+.final-ranking-item:nth-child(n+4) .rank-badge {
+  background: #f0f0f0;
+  color: #666;
+}
+
+.player-info {
+  flex-grow: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.player-name {
+  font-size: 18px;
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.final-score {
+  font-size: 20px;
+  font-weight: bold;
+  color: #42b983;
+}
+
 .restart-button {
-  padding: 12px 24px;
-  font-size: 16px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  background-color: #4CAF50;
+  background-color: #42b983;
   color: white;
+  border: none;
+  padding: 12px 30px;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
   transition: background-color 0.3s;
 }
 
 .restart-button:hover {
-  background-color: #45a049;
+  background-color: #3aa876;
 }
 
 @media (max-width: 768px) {
