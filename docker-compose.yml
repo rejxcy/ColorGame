@@ -6,6 +6,8 @@ services:
     image: colorgame-frontend:latest
     ports:
       - "80:80"
+    environment:
+      - VUE_APP_WS_URL=ws://backend:8080/api/game/ws
     depends_on:
       - backend
 

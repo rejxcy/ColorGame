@@ -5,15 +5,18 @@ export class GameWebSocket {
     }
 
     async connect(roomId, playerName, isHost = false) {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+        // 獲取 WebSocket URL，使用環境變數
+        const wsUrl = process.env.VUE_APP_WS_URL || 'ws://localhost:8080/api/game/ws';
+
         const params = new URLSearchParams({
             room_id: roomId,
             player_name: playerName,
             is_host: isHost
-        })
-        
-        this.ws = new WebSocket(`${protocol}//${window.location.host}/api/game/ws?${params}`)
-        
+        });
+
+        // 使用獲取的 wsUrl 來建立 WebSocket 連接
+        this.ws = new WebSocket(`${wsUrl}?${params}`);
+
         this.ws.onmessage = (event) => {
             try {
                 const message = JSON.parse(event.data);
@@ -42,7 +45,7 @@ export class GameWebSocket {
                 console.log('WebSocket connected');
                 resolve();
             };
-            this.onerror = (error) => {
+            this.ws.onerror = (error) => {
                 console.error('WebSocket error:', error);
                 reject(error);
             };
