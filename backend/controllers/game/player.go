@@ -75,7 +75,7 @@ func (p *Player) HandleMessage(msg Message, room *Room) error {
 // handleGameStart 處理開始遊戲的請求（僅允許房主觸發）
 func (p *Player) handleGameStart(room *Room) error {
 	if !p.IsHost {
-		return errors.New(ErrorMessages[ErrCodeNotHost])
+		return errors.New(ErrCodeNotHost)
 	}
 	return room.StartGame()
 }
@@ -83,11 +83,11 @@ func (p *Player) handleGameStart(room *Room) error {
 // handleAnswer 處理玩家提交的答案
 func (p *Player) handleAnswer(payload interface{}, room *Room) error {
 	if !room.IsGameStarted() {
-		return errors.New(ErrorMessages[ErrCodeGameNotStarted])
+		return errors.New(ErrCodeGameNotStarted)
 	}
 	answer, ok := payload.(string)
 	if !ok {
-		return errors.New(ErrorMessages[ErrCodeInvalidAnswer])
+		return errors.New(ErrCodeInvalidAnswer)
 	}
 	return room.HandleAnswer(p.ID, answer)
 }
@@ -95,7 +95,7 @@ func (p *Player) handleAnswer(payload interface{}, room *Room) error {
 // handleGameReset 處理重置遊戲的請求（僅允許房主觸發）
 func (p *Player) handleGameReset(room *Room) error {
 	if !p.IsHost {
-		return errors.New(ErrorMessages[ErrCodeNotHost])
+		return errors.New(ErrCodeNotHost)
 	}
 	return room.GameReset()
 }

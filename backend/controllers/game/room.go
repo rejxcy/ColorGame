@@ -2,10 +2,8 @@ package game
 
 import (
 	"errors"
-	"fmt"
 	"sort"
 	"sync"
-	"time"
 
 	"github.com/rejxcy/logger"
 )
@@ -16,31 +14,30 @@ func NewRoom(id string) *Room {
 		ID:        id,
 		Players:   make(map[string]*Player),
 		Status:    RoomStatusWaiting,
-		StartTime: time.Now(),
 		mu:        sync.Mutex{},
 	}
 }
 
-// AddPlayer 將新的玩家加入房間中
+// 將新的玩家加入房間中
 func (r *Room) AddPlayer(player *Player) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	if len(r.Players) >= MaxPlayers {
-		return errors.New(ErrorMessages[ErrCodeRoomFull])
+		return errors.New(ErrCodeRoomFull)
 	}
 	r.Players[player.ID] = player
 	return nil
 }
 
-// RemovePlayer 從房間中移除玩家
+// 從房間中移除玩家
 func (r *Room) RemovePlayer(playerID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.Players, playerID)
 }
 
-// BroadcastPlayerList 廣播更新後的玩家列表（包含進度、錯誤數、分數與排名）給所有玩家
+// 廣播更新後的玩家列表（包含進度、錯誤數、分數與排名）給所有玩家
 func (r *Room) BroadcastPlayerList() {
 	// 複製所有非房主玩家資訊到 slice 中，方便進行排序
 	r.mu.Lock()
@@ -87,14 +84,14 @@ func (r *Room) BroadcastPlayerList() {
 	}
 }
 
-// IsGameStarted 判斷遊戲是否已開始
+// 判斷遊戲是否已開始
 func (r *Room) IsGameStarted() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.Status == RoomStatusPlaying
 }
 
-// StartGame 為所有玩家初始化獨立遊戲進度，並廣播初始狀態、遊戲開始訊息
+// 為所有玩家初始化獨立遊戲進度，並廣播初始狀態、遊戲開始訊息
 func (r *Room) StartGame() error {
 	r.mu.Lock()
 
@@ -148,27 +145,23 @@ func (r *Room) StartGame() error {
 		Type:    MsgTypeGameStart,
 		Payload: "遊戲開始",
 	}
-	for _, p := range r.Players {
-		if err := p.Send(gameStartMsg); err != nil {
-			logger.Output.Error("通知 %s 遊戲開始失敗: %v", p.Name, err)
-		}
-	}
+	r.Broadcast(gameStartMsg)
 
 	logger.Output.Info("房間 %s 遊戲開始, 總玩家數: %d", r.ID, len(r.Players)-1)
 	return nil
 }
 
-// HandleAnswer 處理玩家提交的答案，並更新該玩家獨立的遊戲進度
+// 處理玩家提交的答案，並更新該玩家獨立的遊戲進度
 func (r *Room) HandleAnswer(playerID, answer string) error {
 	r.mu.Lock()
 	player, exists := r.Players[playerID]
 	if !exists {
 		r.mu.Unlock()
-		return errors.New(ErrorMessages[ErrCodePlayerNotFound])
+		return errors.New(ErrCodePlayerNotFound)
 	}
 	if player.Game == nil {
 		r.mu.Unlock()
-		return errors.New(ErrorMessages[ErrCodeGameNotStarted])
+		return errors.New(ErrCodeGameNotStarted)
 	}
 	logger.Output.Info("玩家 %s 提交答案: %s", player.Name, answer)
 
@@ -184,8 +177,6 @@ func (r *Room) HandleAnswer(playerID, answer string) error {
 		return err
 	}
 
-
-	// 新增：發送更新後的遊戲狀態（包含最新題目等資訊）
 	state, err := player.Game.GetStatus()
 	if err != nil {
 		logger.Output.Error("取得 %s 遊戲狀態失敗: %v", player.Name, err)
@@ -231,54 +222,7 @@ func (r *Room) Broadcast(msg Message) {
 	}
 }
 
-// 處理房間消息
-func (r *Room) HandleMessage(playerID string, msg Message) error {
-	r.mu.Lock()
-	player, exists := r.Players[playerID]
-	r.mu.Unlock()
-
-	if !exists {
-		return errors.New(ErrorMessages[ErrCodePlayerNotFound])
-	}
-
-	switch msg.Type {
-	case MsgTypeReady:
-		if player.IsHost {
-			logger.Output.Error("Host cannot set ready state")
-			return errors.New(ErrorMessages[ErrCodeNotHost])
-		}
-
-		ready, ok := msg.Payload.(bool)
-		if !ok {
-			logger.Output.Error("Invalid ready state payload")
-			return errors.New(ErrorMessages[ErrCodeInvalidMessage])
-		}
-
-		player.IsReady = ready
-		logger.Output.Info("Player %s ready state changed to: %v", player.Name, ready)
-		r.BroadcastPlayerList()
-		return nil
-
-	case MsgTypeGameStart:
-		if !player.IsHost {
-			logger.Output.Error("Non-host player tried to start game")
-			return errors.New(ErrorMessages[ErrCodeNotHost])
-		}
-		return r.StartGame()
-
-	case MsgTypeGameReset:
-		if !player.IsHost {
-			logger.Output.Error("Non-host player tried to restart game")
-			return errors.New(ErrorMessages[ErrCodeNotHost])
-		}
-		return r.GameReset()
-
-	default:
-		return fmt.Errorf("未知的消息類型: %s", msg.Type)
-	}
-}
-
-// RestartGame 重置每位玩家的遊戲狀態，並發送重新開始的通知
+// 重置每位玩家的遊戲狀態，並發送重新開始的通知
 func (r *Room) GameReset() error {
 	r.mu.Lock()
 	r.Status = RoomStatusWaiting

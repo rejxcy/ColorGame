@@ -27,7 +27,7 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
-// sendErrorAndClose 封裝錯誤回應（發送錯誤消息並安全關閉連線）
+// 封裝錯誤回應（發送錯誤消息並安全關閉連線）
 func sendErrorAndClose(conn *websocket.Conn, err error) {
 	if conn != nil {
 		if writeErr := conn.WriteJSON(Message{
@@ -40,14 +40,7 @@ func sendErrorAndClose(conn *websocket.Conn, err error) {
 	}
 }
 
-// HandleRequest 為示例函數，展示如何使用 sendErrorAndClose 處理錯誤
-func HandleRequest(conn *websocket.Conn, data interface{}) {
-	// 這裡執行業務邏輯…
-	err := errors.New("示例錯誤")
-	sendErrorAndClose(conn, err)
-}
-
-// HandleWebSocket 處理 WebSocket 連線的建立與參數驗證
+// 處理 WebSocket 連線的建立與參數驗證
 func (c *controller) HandleWebSocket(ctx *gin.Context) {
 	// 允許跨域，開發環境下允許所有來源
 	upgrader.CheckOrigin = func(r *http.Request) bool {
@@ -105,7 +98,7 @@ func (c *controller) HandleWebSocket(ctx *gin.Context) {
 	c.handlePlayerMessages(room, player)
 }
 
-// handlePlayerMessages 持續接收玩家消息並委由玩家處理
+// 持續接收玩家消息並委由玩家處理
 func (c *controller) handlePlayerMessages(room *Room, player *Player) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -146,14 +139,14 @@ func (c *controller) handlePlayerMessages(room *Room, player *Player) {
 	}
 }
 
-// createRoom 在 Context 中創建房間
+// 在 Context 中創建房間
 func (c *controller) createRoom(id string) *Room {
 	room := NewRoom(id)
 	c.Base.GameRooms.Store(id, room)
 	return room
 }
 
-// getRoom 從 Context 中獲取房間
+// 從 Context 中獲取房間
 func (c *controller) getRoom(id string) *Room {
 	if room, ok := c.Base.GameRooms.Load(id); ok {
 		return room.(*Room)
@@ -161,7 +154,7 @@ func (c *controller) getRoom(id string) *Room {
 	return nil
 }
 
-// removeRoom 從 Context 中移除房間
+// 從 Context 中移除房間
 func (c *controller) removeRoom(id string) {
 	c.Base.GameRooms.Delete(id)
 }

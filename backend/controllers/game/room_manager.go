@@ -1,14 +1,6 @@
 package game
 
-import "sync"
-
 var GlobalRoomManager = NewRoomManager()
-
-// RoomManager 相關結構
-type RoomManager struct {
-	rooms map[string]*Room
-	mu    sync.Mutex
-}
 
 // NewRoomManager 創建新的房間管理器
 func NewRoomManager() *RoomManager {

@@ -12,11 +12,6 @@ var (
 	ErrGameNotStarted = errors.New("遊戲尚未開始")
 )
 
-const (
-	QuizCount = 10
-	TimeUnit  = int64(time.Millisecond)
-)
-
 // 可用的顏色列表
 var ValidColors = []string{"red", "green", "blue", "yellow", "orange", "purple"}
 
@@ -37,7 +32,6 @@ func NewGame() *Game {
 		TotalQuiz:  QuizCount,
 		WrongCount: 0,
 		IsFinished: false,
-		StartTime:  time.Now(),
 	}
 	game.generateColors()
 	return game
@@ -48,7 +42,6 @@ func (g *Game) GetStatus() (GameStatus, error) {
 	if g.IsFinished {
 		return GameStatus{
 			Progress:   QuizCount,
-			Percentage: 100,
 			WrongCount: g.WrongCount,
 			IsFinished: true,
 			TotalQuiz:  QuizCount,
@@ -59,7 +52,6 @@ func (g *Game) GetStatus() (GameStatus, error) {
 		Quiz:         g.QuizList[g.Progress],
 		DisplayColor: g.ColorList[g.Progress],
 		Progress:     g.Progress,
-		Percentage:   float64(g.Progress) / float64(QuizCount) * 100,
 		WrongCount:   g.WrongCount,
 		IsFinished:   g.IsFinished,
 		TotalQuiz:    QuizCount,
@@ -91,7 +83,6 @@ func (g *Game) Restart() {
 	g.Progress = 0
 	g.WrongCount = 0
 	g.IsFinished = false
-	g.StartTime = time.Now()
 }
 
 // 產生新的題目與顏色列表
